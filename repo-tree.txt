@@ -1,0 +1,392 @@
+Elenco del percorso delle cartelle per il volume Andrew
+Numero di serie del volume: 801E-1152
+D:.
+|   .dockerignore
+|   .env.example
+|   Cargo.lock
+|   Cargo.toml
+|   CODE_OF_CONDUCT.md
+|   compose.env
+|   compose.yaml
+|   CONTRIBUTING.md
+|   docker-bake.hcl
+|   DOCKER.md
+|   dockerfile
+|   LICENSE
+|   makefile
+|   README.md
+|   repo-tree.txt
+|   
+|   |   CODEOWNERS
+|   |   FUNDING.yml
+|   |   
+|   \---workflows
+|           release.yaml
+|           
++---.vscode
++---crates
+|   +---client
+|   |   |   Cargo.toml
+|   |   |   
+|   |   \---src
+|   |           client.rs
+|   |           consts.rs
+|   |           consumers.rs
+|   |           manager.rs
+|   |           message.rs
+|   |           
+|   +---data
+|   |   |   Cargo.toml
+|   |   |   
+|   |   \---src
+|   |           compression.rs
+|   |           data.rs
+|   |           merge.rs
+|   |           transformer.rs
+|   |           
+|   +---saver
+|   |   |   Cargo.toml
+|   |   |   readme.md
+|   |   |   
+|   |   \---src
+|   |           main.rs
+|   |           
+|   +---simulator
+|   |   |   Cargo.toml
+|   |   |   readme.md
+|   |   |   
+|   |   \---src
+|   |           main.rs
+|   |           server.rs
+|   |           
+|   \---timescale
+|       |   Cargo.toml
+|       |   
+|       +---.sqlx
+|       |       query-242dca2d8a422e6043b05db01d42903fb29d257e5edb641211ee1148637b33d5.json
+|       |       query-558382d26b558498dea63c4afdcc8bce1bd85adf440a424f35ac774b5535cb39.json
+|       |       query-c899c95cf53a6b6d0d4e3a0b96b2d507d58a569841601cafcd7d486a245f62fe.json
+|       |       
+|       +---migrations
+|       |       20250520180813_initial.sql
+|       |       
+|       \---src
+|               app_timing.rs
+|               lib.rs
+|               timing.rs
+|               
++---dash
+|   |   .dockerignore
+|   |   .env.example
+|   |   .nvmrc
+|   |   .prettierrc.yaml
+|   |   .yarnrc.yml
+|   |   dockerfile
+|   |   eslint.config.mjs
+|   |   next.config.ts
+|   |   package.json
+|   |   postcss.config.mjs
+|   |   tsconfig.json
+|   |   yarn.lock
+|   |   
+|   +---public
+|   |   |   manifest.json
+|   |   |   tag-logo.png
+|   |   |   tag-logo.svg
+|   |   |   
+|   |   +---country-flags
+|   |   |       aus.svg
+|   |   |       aut.svg
+|   |   |       aze.svg
+|   |   |       bel.svg
+|   |   |       bra.svg
+|   |   |       brn.svg
+|   |   |       can.svg
+|   |   |       chn.svg
+|   |   |       esp.svg
+|   |   |       fra.svg
+|   |   |       gbr.svg
+|   |   |       ger.svg
+|   |   |       hun.svg
+|   |   |       ita.svg
+|   |   |       jpn.svg
+|   |   |       ksa.svg
+|   |   |       mex.svg
+|   |   |       mon.svg
+|   |   |       ned.svg
+|   |   |       por.svg
+|   |   |       qat.svg
+|   |   |       rus.svg
+|   |   |       sgp.svg
+|   |   |       uae.svg
+|   |   |       usa.svg
+|   |   |       
+|   |   +---flags
+|   |   |       black-and-white-flag.svg
+|   |   |       blue-flag.svg
+|   |   |       chequered-flag.svg
+|   |   |       double-yellow-flag.svg
+|   |   |       green-flag.svg
+|   |   |       red-flag.svg
+|   |   |       yellow-flag.svg
+|   |   |       
+|   |   +---icons
+|   |   |       alert-triangle.svg
+|   |   |       arrow-up.svg
+|   |   |       bmc-logo.svg
+|   |   |       chevron-down.svg
+|   |   |       cloud.heavyrain.svg
+|   |   |       cloud.rain.svg
+|   |   |       github.svg
+|   |   |       help-circle.svg
+|   |   |       humidity.svg
+|   |   |       info.svg
+|   |   |       pause-2.svg
+|   |   |       pause.svg
+|   |   |       play-2.svg
+|   |   |       play.svg
+|   |   |       settings.svg
+|   |   |       sidebar.svg
+|   |   |       x-octagon.svg
+|   |   |       xmark.svg
+|   |   |       
+|   |   +---sounds
+|   |   |       chime.mp3
+|   |   |       
+|   |   +---team-logos
+|   |   |       alpine.svg
+|   |   |       aston-martin.svg
+|   |   |       ferrari.svg
+|   |   |       haas-f1-team.svg
+|   |   |       kick-sauber.svg
+|   |   |       mclaren.svg
+|   |   |       mercedes.svg
+|   |   |       racing-bulls.svg
+|   |   |       red-bull-racing.svg
+|   |   |       williams.svg
+|   |   |       
+|   |   \---tires
+|   |           hard.svg
+|   |           intermediate.svg
+|   |           medium.svg
+|   |           soft.svg
+|   |           unknown.svg
+|   |           wet.svg
+|   |           
+|   \---src
+|       |   env-script.tsx
+|       |   env.ts
+|       |   metadata.ts
+|       |   viewport.ts
+|       |   
+|       +---app
+|       |   |   apple-icon.png
+|       |   |   favicon.ico
+|       |   |   global-error.tsx
+|       |   |   icon.png
+|       |   |   layout.tsx
+|       |   |   not-found.tsx
+|       |   |   opengraph-image.png
+|       |   |   twitter-image.png
+|       |   |   
+|       |   +---(nav)
+|       |   |   |   layout.tsx
+|       |   |   |   page.tsx
+|       |   |   |   
+|       |   |   +---help
+|       |   |   |       page.tsx
+|       |   |   |       
+|       |   |   \---schedule
+|       |   |           page.tsx
+|       |   |           
+|       |   +---dashboard
+|       |   |   |   layout.tsx
+|       |   |   |   page.tsx
+|       |   |   |   
+|       |   |   +---driver
+|       |   |   |   \---[nr]
+|       |   |   |           page.tsx
+|       |   |   |           
+|       |   |   +---settings
+|       |   |   |       layout.tsx
+|       |   |   |       page.tsx
+|       |   |   |       
+|       |   |   +---standings
+|       |   |   |       page.tsx
+|       |   |   |       
+|       |   |   +---track-map
+|       |   |   |       page.tsx
+|       |   |   |       
+|       |   |   +---vertical
+|       |   |   |       page.tsx
+|       |   |   |       
+|       |   |   \---weather
+|       |   |           map-timeline.tsx
+|       |   |           map.tsx
+|       |   |           page.tsx
+|       |   |           
+|       |   \---embed
+|       |           page.tsx
+|       |           
+|       +---components
+|       |   |   ConnectionStatus.tsx
+|       |   |   DelayInput.tsx
+|       |   |   DelayTimer.tsx
+|       |   |   Flag.tsx
+|       |   |   Footer.tsx
+|       |   |   LapCount.tsx
+|       |   |   Note.tsx
+|       |   |   NumberDiff.tsx
+|       |   |   OledModeProvider.tsx
+|       |   |   Qualifying.tsx
+|       |   |   QualifyingDriver.tsx
+|       |   |   ScrollHint.tsx
+|       |   |   SessionInfo.tsx
+|       |   |   Sidebar.tsx
+|       |   |   SidenavButton.tsx
+|       |   |   TrackInfo.tsx
+|       |   |   WeatherInfo.tsx
+|       |   |   
+|       |   +---complications
+|       |   |       Gauge.tsx
+|       |   |       Humidity.tsx
+|       |   |       Rain.tsx
+|       |   |       Temperature.tsx
+|       |   |       WindSpeed.tsx
+|       |   |       
+|       |   +---dashboard
+|       |   |       CircleOfDoom.tsx
+|       |   |       DriverViolations.tsx
+|       |   |       LeaderBoard.tsx
+|       |   |       Map.tsx
+|       |   |       RaceControl.tsx
+|       |   |       RaceControlMessage.tsx
+|       |   |       RadioMessage.tsx
+|       |   |       TeamRadios.tsx
+|       |   |       TrackViolations.tsx
+|       |   |       VerticalOfDoom.tsx
+|       |   |       
+|       |   +---driver
+|       |   |       Driver.tsx
+|       |   |       DriverCarMetrics.tsx
+|       |   |       DriverDRS.tsx
+|       |   |       DriverGap.tsx
+|       |   |       DriverHistoryTires.tsx
+|       |   |       DriverInfo.tsx
+|       |   |       DriverLapTime.tsx
+|       |   |       DriverMiniSectors.tsx
+|       |   |       DriverPedals.tsx
+|       |   |       DriverTag.tsx
+|       |   |       DriverTire.tsx
+|       |   |       
+|       |   +---schedule
+|       |   |       Countdown.tsx
+|       |   |       NextRound.tsx
+|       |   |       Round.tsx
+|       |   |       Schedule.tsx
+|       |   |       WeekendSchedule.tsx
+|       |   |       
+|       |   +---settings
+|       |   |       FavoriteDrivers.tsx
+|       |   |       
+|       |   \---ui
+|       |           Button.tsx
+|       |           Input.tsx
+|       |           Modal.tsx
+|       |           PlayControls.tsx
+|       |           Progress.tsx
+|       |           SegmentedControls.tsx
+|       |           Select.tsx
+|       |           SelectMultiple.tsx
+|       |           Slider.tsx
+|       |           Toggle.tsx
+|       |           
+|       +---hooks
+|       |       useBuffer.ts
+|       |       useDataEngine.ts
+|       |       useDevMode.ts
+|       |       useSocket.ts
+|       |       useStatefulBuffer.ts
+|       |       useStores.ts
+|       |       useWakeLock.ts
+|       |       
+|       +---lib
+|       |       calculatePosition.ts
+|       |       circle.ts
+|       |       dateFormatter.ts
+|       |       fetchMap.ts
+|       |       geocode.ts
+|       |       getTrackStatusMessage.ts
+|       |       getWindDirection.ts
+|       |       groupSessionByDay.ts
+|       |       inflate.ts
+|       |       map.ts
+|       |       merge.ts
+|       |       params.ts
+|       |       rainviewer.ts
+|       |       sorting.ts
+|       |       toTrackTime.ts
+|       |       utcToLocalMs.ts
+|       |       
+|       +---stores
+|       |       useDataStore.ts
+|       |       useSettingsStore.ts
+|       |       useSidebarStore.ts
+|       |       
+|       +---styles
+|       |       globals.css
+|       |       
+|       \---types
+|               geocode.type.ts
+|               map.type.ts
+|               message.type.ts
+|               rainviewer.type.ts
+|               schedule.type.ts
+|               state.type.ts
+|               
++---data
+\---services
+    +---analytics
+    |   |   Cargo.toml
+    |   |   readme.md
+    |   |   
+    |   \---src
+    |       |   main.rs
+    |       |   
+    |       \---server
+    |               gap.rs
+    |               health.rs
+    |               laptime.rs
+    |               
+    +---api
+    |   |   Cargo.toml
+    |   |   readme.md
+    |   |   
+    |   \---src
+    |       |   main.rs
+    |       |   
+    |       \---endpoints
+    |               health.rs
+    |               schedule.rs
+    |               
+    +---importer
+    |   |   Cargo.toml
+    |   |   
+    |   \---src
+    |           main.rs
+    |           models.rs
+    |           parsers.rs
+    |           
+    \---live
+        |   Cargo.toml
+        |   readme.md
+        |   
+        \---src
+            |   compression.rs
+            |   main.rs
+            |   
+            \---server
+                    drivers.rs
+                    health.rs
+                    live.rs
+                    

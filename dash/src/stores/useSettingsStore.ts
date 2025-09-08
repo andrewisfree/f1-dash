@@ -43,6 +43,28 @@ type SettingsStore = {
 
 	delayIsPaused: boolean;
 	setDelayIsPaused: (delayIsPaused: boolean) => void;
+
+	// Circle of Doom settings
+	circleScale: "piecewise" | "spread" | "fixed";
+	setCircleScale: (mode: "piecewise" | "spread" | "fixed") => void;
+	circleG1: number; // seconds for first segment
+	setCircleG1: (g1: number) => void;
+	circleG2: number; // seconds for second segment end
+	setCircleG2: (g2: number) => void;
+	circleFixedSeconds: number; // seconds represented by 360° when fixed
+	setCircleFixedSeconds: (sec: number) => void;
+
+	// Circle: limit displayed drivers (0 = tutti)
+	circleTopN: number;
+	setCircleTopN: (n: number) => void;
+
+	// Circle/Vertical layout
+	circleLayout: "circle" | "vertical";
+	setCircleLayout: (layout: "circle" | "vertical") => void;
+
+	// Vertical connectors (adjacent gaps)
+	showVerticalConnectors: boolean;
+	setShowVerticalConnectors: (v: boolean) => void;
 };
 
 export const useSettingsStore = create<SettingsStore>()(
@@ -89,6 +111,25 @@ export const useSettingsStore = create<SettingsStore>()(
 
 				delayIsPaused: true,
 				setDelayIsPaused: (delayIsPaused: boolean) => set({ delayIsPaused }),
+
+				// Circle of Doom defaults
+				circleScale: "piecewise",
+				setCircleScale: (mode) => set({ circleScale: mode }),
+				circleG1: 3,
+				setCircleG1: (g1: number) => set({ circleG1: g1 }),
+				circleG2: 15,
+				setCircleG2: (g2: number) => set({ circleG2: g2 }),
+				circleFixedSeconds: 30,
+				setCircleFixedSeconds: (sec: number) => set({ circleFixedSeconds: sec }),
+
+				circleTopN: 0,
+				setCircleTopN: (n: number) => set({ circleTopN: n }),
+
+				circleLayout: "circle",
+				setCircleLayout: (layout) => set({ circleLayout: layout }),
+
+				showVerticalConnectors: true,
+				setShowVerticalConnectors: (v: boolean) => set({ showVerticalConnectors: v }),
 			}),
 			{
 				name: "settings-storage",

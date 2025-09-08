@@ -66,3 +66,4 @@ services:
       - ORIGIN=http://localhost:3000
       - ANALYTICS_ADDRESS=0.0.0.0:4002
       - RUST_LOG=analytics=debug
+      - DATABASE_URL=postgres://postgres:password@timescaledb:5432/postgres

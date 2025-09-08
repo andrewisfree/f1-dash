@@ -105,6 +105,87 @@ export default function SettingsPage() {
 				]}
 			/>
 
+			<h2 className="my-4 text-2xl">Circle of Doom</h2>
+
+			<p className="mb-2 text-zinc-500">Scegli la scala per i distacchi.</p>
+			<SegmentedControls
+				id="circle-scale"
+				selected={settings.circleScale}
+				onSelect={settings.setCircleScale}
+				options={[
+					{ label: "Piecewise", value: "piecewise" },
+					{ label: "Spread", value: "spread" },
+					{ label: "Fixed", value: "fixed" },
+				]}
+			/>
+
+			<p className="mt-3 mb-2 text-zinc-500">Scegli il layout.</p>
+			<SegmentedControls
+				id="circle-layout"
+				selected={settings.circleLayout}
+				onSelect={settings.setCircleLayout}
+				options={[
+					{ label: "Cerchio", value: "circle" },
+					{ label: "Verticale", value: "vertical" },
+				]}
+			/>
+
+			{settings.circleLayout === "vertical" && (
+				<div className="mt-3 flex items-center gap-2">
+					<Toggle enabled={settings.showVerticalConnectors} setEnabled={(v) => settings.setShowVerticalConnectors(v)} />
+					<p className="text-zinc-500">Mostra linee di distacco tra piloti</p>
+				</div>
+			)}
+
+			{settings.circleScale === "piecewise" && (
+				<div className="mt-3 flex flex-col gap-2">
+					<div className="flex items-center gap-2">
+						<Input
+							value={String(settings.circleG1)}
+							setValue={(v) => {
+								const n = Number(v);
+								if (!isNaN(n)) settings.setCircleG1(n);
+							}}
+						/>
+						<p className="text-zinc-500">g1 (0–g1 s → 240°)</p>
+					</div>
+					<div className="flex items-center gap-2">
+						<Input
+							value={String(settings.circleG2)}
+							setValue={(v) => {
+								const n = Number(v);
+								if (!isNaN(n)) settings.setCircleG2(n);
+							}}
+						/>
+						<p className="text-zinc-500">g2 (g1–g2 s → +120°)</p>
+					</div>
+				</div>
+			)}
+
+			{settings.circleScale === "fixed" && (
+				<div className="mt-3 flex items-center gap-2">
+					<Input
+						value={String(settings.circleFixedSeconds)}
+						setValue={(v) => {
+							const n = Number(v);
+							if (!isNaN(n)) settings.setCircleFixedSeconds(n);
+						}}
+					/>
+					<p className="text-zinc-500">360° = N secondi</p>
+				</div>
+			)}
+
+			<div className="mt-3 flex items-center gap-2">
+				<Input
+					value={String(settings.circleTopN)}
+					setValue={(v) => {
+						const n = Number(v);
+						if (!isNaN(n)) settings.setCircleTopN(n);
+					}}
+				/>
+				<p className="text-zinc-500">Mostra solo i primi N (0 = tutti)</p>
+			</div>
+
 			<h2 className="my-4 text-2xl">Delay</h2>
 
 			<p className="mb-4">

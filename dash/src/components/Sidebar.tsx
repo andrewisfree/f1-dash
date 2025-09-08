@@ -20,6 +20,10 @@ const liveTimingItems = [
 		name: "Dashboard",
 	},
 	{
+		href: "/dashboard/vertical",
+		name: "Vertical of Doom",
+	},
+	{
 		href: "/dashboard/track-map",
 		name: "Track Map",
 	},
