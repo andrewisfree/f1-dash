@@ -125,11 +125,7 @@ type Dot = {
   drsOn: boolean;
 };
 
-type VODProps = {
-  orientation?: "vertical" | "horizontal";
-};
-
-export default function VerticalOfDoom({ orientation = "vertical" }: VODProps) {
+export default function VerticalOfDoom() {
   const timing = useDataStore((s) => s.timingData);
   const drivers = useDataStore((s) => s.driverList) as DriverList | null;
   const appData = useDataStore((s) => s.timingAppData);
@@ -227,11 +223,11 @@ export default function VerticalOfDoom({ orientation = "vertical" }: VODProps) {
       <h3 className="mb-2 text-sm font-medium text-zinc-400">Vertical of Doom - distacchi</h3>
       <div className="flex h-[calc(100%-1.75rem)] items-center justify-center">
         <svg
-          width={orientation === "horizontal" ? height : width}
-          height={orientation === "horizontal" ? width : height}
+          width={width}
+          height={height}
           viewBox={`0 0 ${width} ${height}`}
         >
-          <g transform={orientation === "horizontal" ? `translate(0, ${height}) rotate(-90)` : undefined}>
+          <g>
           {/* axis */}
           <line x1={axisX} y1={padTop} x2={axisX} y2={height - padBottom} className="stroke-zinc-800" strokeWidth={2} />
 
@@ -360,9 +356,9 @@ export default function VerticalOfDoom({ orientation = "vertical" }: VODProps) {
                     <rect
                       key={`sec-${d.racingNumber}-${i}`}
                       x={x}
-                      y={y - 6}
+                      y={y - 3}
                       width={10}
-                      height={10}
+                      height={5}
                       rx={2}
                       className={clsx(sectorFill(s), strokeClass)}
                       strokeWidth={1.5}
@@ -371,8 +367,14 @@ export default function VerticalOfDoom({ orientation = "vertical" }: VODProps) {
                 })}
                 {/* tire icon before time */}
                 <image href={iconHref} x={axisX + 152} y={y - 8} width="16" height="16" />
+                {/* laps on current tire */}
+                {typeof stint?.totalLaps === "number" && (
+                  <text x={axisX + 172} y={y + 4} className="fill-zinc-600 tabular-nums" fontSize={11}>
+                    {stint.totalLaps}
+                  </text>
+                )}
                 {/* last lap time, compact seconds with 1 decimal (truncated) */}
-                <text x={axisX + 174} y={y + 4} className={lastClass} fontSize={12}>
+                <text x={axisX + 192} y={y + 4} className={lastClass} fontSize={12}>
                   {compactLast ?? "-- -- ---"}
                 </text>
                 {/* removed laps on stint label */}

@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import clsx from "clsx";
 
@@ -18,7 +17,6 @@ import type { Driver, TimingDataDriver } from "@/types/state.type";
 export default function VerticalPage() {
   const drivers = useDataStore((state) => state?.driverList);
   const driversTiming = useDataStore((state) => state?.timingData);
-  const [orientation, setOrientation] = useState<"vertical" | "horizontal">("vertical");
 
   return (
     <div className="flex flex-col-reverse md:h-full md:flex-row gap-2">
@@ -42,28 +40,7 @@ export default function VerticalPage() {
       </div>
 
       <div className="relative md:flex-1">
-        <div className="absolute right-2 top-2 z-10 flex gap-2">
-          <button
-            className={clsx(
-              "rounded-md border border-zinc-700 px-2 py-1 text-xs text-zinc-300",
-              orientation === "vertical" ? "bg-zinc-800" : "bg-transparent",
-            )}
-            onClick={() => setOrientation("vertical")}
-          >
-            Verticale
-          </button>
-          <button
-            className={clsx(
-              "rounded-md border border-zinc-700 px-2 py-1 text-xs text-zinc-300",
-              orientation === "horizontal" ? "bg-zinc-800" : "bg-transparent",
-            )}
-            onClick={() => setOrientation("horizontal")}
-          >
-            Orizzontale (beta)
-          </button>
-        </div>
-
-        <VerticalOfDoom orientation={orientation} />
+        <VerticalOfDoom />
       </div>
     </div>
   );
@@ -158,4 +135,3 @@ const SkeletonDriver = () => {
     </div>
   );
 };
-
