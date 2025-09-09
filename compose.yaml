@@ -29,6 +29,10 @@ services:
     image: ghcr.io/slowlydev/f1-dash:latest
     build:
       context: ./dash/
+      args:
+        NEXT_PUBLIC_LIVE_URL: ${NEXT_PUBLIC_LIVE_URL:-http://localhost:4000}
+        API_URL: ${API_URL:-http://api:4001}
+        DISABLE_IFRAME: ${DISABLE_IFRAME:-1}
     restart: unless-stopped
     ports:
       - 3000:3000
