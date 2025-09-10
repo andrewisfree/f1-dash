@@ -6,11 +6,11 @@ services:
       target: live
     restart: unless-stopped
     ports:
-      - 4000:4000
+      - ${LIVE_PORT:-4000}:4000
     environment:
-      - ORIGIN=http://localhost:3000;http://${HOST_IP}:3000
-      - LIVE_ADDRESS=0.0.0.0:4000
-      - RUST_LOG=live=debug,client=debug
+      - ORIGIN=${ORIGIN:-http://localhost:${FRONTEND_PORT:-3000};http://${HOST_IP}:${FRONTEND_PORT:-3000}}
+      - LIVE_ADDRESS=${LIVE_ADDRESS:-0.0.0.0:4000}
+      - RUST_LOG=${RUST_LOG:-live=debug,client=debug}
 
   api:
     image: ghcr.io/slowlydev/f1-dash-api:latest
@@ -19,39 +19,38 @@ services:
       target: api
     restart: unless-stopped
     ports:
-      - 4001:4001
+      - ${API_PORT:-4001}:4001
     environment:
-      - ORIGIN=http://localhost:3000;http://${HOST_IP}:3000
-      - API_ADDRESS=0.0.0.0:4001
-      - RUST_LOG=api=debug
+      - ORIGIN=${ORIGIN:-http://localhost:${FRONTEND_PORT:-3000};http://${HOST_IP}:${FRONTEND_PORT:-3000}}
+      - API_ADDRESS=${API_ADDRESS:-0.0.0.0:4001}
+      - RUST_LOG=${RUST_LOG:-api=debug}
 
   frontend:
     image: ghcr.io/slowlydev/f1-dash:latest
     build:
       context: ./dash/
       args:
-        NEXT_PUBLIC_LIVE_URL: http://${HOST_IP}:4000
+        NEXT_PUBLIC_LIVE_URL: ${NEXT_PUBLIC_LIVE_URL:-http://${HOST_IP:-localhost}:${LIVE_PORT:-4000}}
         API_URL: ${API_URL:-http://api:4001}
         DISABLE_IFRAME: ${DISABLE_IFRAME:-1}
     restart: unless-stopped
     ports:
-      - 3000:3000
+      - ${FRONTEND_PORT:-3000}:3000
     depends_on:
       - api
       - live
     environment:
-      - NEXT_PUBLIC_LIVE_URL=http://${HOST_IP}:4000
-      - API_URL=http://api:4001
-
-      - DISABLE_IFRAME=1
+      - NEXT_PUBLIC_LIVE_URL=${NEXT_PUBLIC_LIVE_URL:-http://${HOST_IP:-localhost}:${LIVE_PORT:-4000}}
+      - API_URL=${API_URL:-http://api:4001}
+      - DISABLE_IFRAME=${DISABLE_IFRAME:-1}
 
   timescaledb:
     image: timescale/timescaledb:latest-pg16
     ports:
-      - 5432:5432
+      - ${PG_PORT:-5432}:5432
     restart: unless-stopped
     environment:
-      - POSTGRES_PASSWORD=password
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-password}
 
   importer:
     image: ghcr.io/slowlydev/f1-dash-importer:latest
@@ -59,7 +58,7 @@ services:
       context: .
       target: importer
     environment:
-      - DATABASE_URL=postgres://postgres:password@timescaledb:5432/postgres
+      - DATABASE_URL=${DATABASE_URL:-postgres://postgres:password@timescaledb:5432/postgres}
 
   analytics:
     image: ghcr.io/slowlydev/f1-dash-analytics:latest
@@ -67,7 +66,7 @@ services:
       context: .
       target: analytics
     environment:
-      - ORIGIN=http://localhost:3000;http://${HOST_IP}:3000
-      - ANALYTICS_ADDRESS=0.0.0.0:4002
-      - RUST_LOG=analytics=debug
-      - DATABASE_URL=postgres://postgres:password@timescaledb:5432/postgres
+      - ORIGIN=${ORIGIN:-http://localhost:${FRONTEND_PORT:-3000};http://${HOST_IP}:${FRONTEND_PORT:-3000}}
+      - ANALYTICS_ADDRESS=${ANALYTICS_ADDRESS:-0.0.0.0:4002}
+      - RUST_LOG=${RUST_LOG:-analytics=debug}
+      - DATABASE_URL=${DATABASE_URL:-postgres://postgres:password@timescaledb:5432/postgres}
