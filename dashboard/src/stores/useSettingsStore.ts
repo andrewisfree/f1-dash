@@ -2,6 +2,7 @@ import { persist, createJSONStorage, subscribeWithSelector } from "zustand/middl
 import { create } from "zustand";
 
 type SpeedUnit = "metric" | "imperial";
+type VerticalScaleMode = "battle" | "spread" | "fixed";
 
 type SettingsStore = {
 	delay: number;
@@ -43,6 +44,21 @@ type SettingsStore = {
 
 	delayIsPaused: boolean;
 	setDelayIsPaused: (delayIsPaused: boolean) => void;
+
+	verticalScale: VerticalScaleMode;
+	setVerticalScale: (verticalScale: VerticalScaleMode) => void;
+
+	verticalTopN: number;
+	setVerticalTopN: (verticalTopN: number) => void;
+
+	verticalFixedSeconds: number;
+	setVerticalFixedSeconds: (verticalFixedSeconds: number) => void;
+
+	verticalBattleSeconds: number;
+	setVerticalBattleSeconds: (verticalBattleSeconds: number) => void;
+
+	verticalConnectors: boolean;
+	setVerticalConnectors: (verticalConnectors: boolean) => void;
 };
 
 export const useSettingsStore = create<SettingsStore>()(
@@ -89,6 +105,21 @@ export const useSettingsStore = create<SettingsStore>()(
 
 				delayIsPaused: true,
 				setDelayIsPaused: (delayIsPaused: boolean) => set({ delayIsPaused }),
+
+				verticalScale: "battle",
+				setVerticalScale: (verticalScale: VerticalScaleMode) => set({ verticalScale }),
+
+				verticalTopN: 0,
+				setVerticalTopN: (verticalTopN: number) => set({ verticalTopN }),
+
+				verticalFixedSeconds: 30,
+				setVerticalFixedSeconds: (verticalFixedSeconds: number) => set({ verticalFixedSeconds }),
+
+				verticalBattleSeconds: 3,
+				setVerticalBattleSeconds: (verticalBattleSeconds: number) => set({ verticalBattleSeconds }),
+
+				verticalConnectors: true,
+				setVerticalConnectors: (verticalConnectors: boolean) => set({ verticalConnectors }),
 			}),
 			{
 				name: "settings-storage",

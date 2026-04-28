@@ -24,6 +24,10 @@ const liveTimingItems = [
 		name: "Track Map",
 	},
 	{
+		href: "/dashboard/vertical",
+		name: "Vertical",
+	},
+	{
 		href: "/dashboard/standings",
 		name: "Standings",
 	},

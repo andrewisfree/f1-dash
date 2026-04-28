@@ -1,5 +1,6 @@
 # os
 .DS_Store
+.claude/
 
 # creds
 .env

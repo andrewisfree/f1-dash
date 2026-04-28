@@ -15,6 +15,7 @@ import { sortPos } from "@/lib/sorting";
 import { useDataStore } from "@/stores/useDataStore";
 import type { Driver, TimingDataDriver } from "@/types/state.type";
 import { useSettingsStore } from "@/stores/useSettingsStore";
+import { inDangerZone } from "@/lib/qualifying";
 
 export default function TrackMap() {
 	const drivers = useDataStore((state) => state.state?.DriverList);
@@ -58,18 +59,6 @@ type TrackMapDriverProps = {
 const hasDRS = (drs: number) => drs > 9;
 
 const possibleDRS = (drs: number) => drs === 8;
-
-const inDangerZone = (position: number, sessionPart: number) => {
-	switch (sessionPart) {
-		case 1:
-			return position > 15;
-		case 2:
-			return position > 10;
-		case 3:
-		default:
-			return false;
-	}
-};
 
 const TrackMapDriver = ({ position, driver, timingDriver }: TrackMapDriverProps) => {
 	const sessionPart = useDataStore((state) => state.state?.TimingData?.SessionPart);
