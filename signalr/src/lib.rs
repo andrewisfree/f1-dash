@@ -86,7 +86,10 @@ pub async fn create_client(url: &str, hub: &str) -> Result<SignalrClient, anyhow
     let mut req: Request<()> = url.into_client_request()?;
 
     let headers = req.headers_mut();
-    headers.insert(header::USER_AGENT, HeaderValue::from_static("BestHTTP"));
+    headers.insert(
+        header::USER_AGENT,
+        HeaderValue::from_static("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"),
+    );
     headers.insert(
         header::ACCEPT_ENCODING,
         HeaderValue::from_static("gzip,identity"),
