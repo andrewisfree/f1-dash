@@ -2,7 +2,7 @@ use std::{env, str::FromStr};
 
 use futures::{SinkExt, Stream};
 use reqwest::{
-    Url,
+    Client, Url,
     header::{self, HeaderValue},
 };
 use serde::{Deserialize, Serialize};
@@ -31,7 +31,9 @@ struct Negotiation {
     cookie: String,
 }
 
-async fn negotiate(url: &str, hub: &str) -> Result<Negotiation, anyhow::Error> {
+const UA: &'static str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+
+async fn negotiate(url: &str, hub: &str, client: Client) -> Result<Negotiation, anyhow::Error> {
     let hub = ConnectionData([Connection {
         name: hub.to_string(),
     }]);
@@ -43,7 +45,7 @@ async fn negotiate(url: &str, hub: &str) -> Result<Negotiation, anyhow::Error> {
         &[("clientProtocol", "1.5"), ("connectionData", &hub_param)],
     )?;
 
-    let req = reqwest::get(url).await?;
+    let req = client.get(url).send().await?;
 
     let headers = req.headers().clone();
     let res: NegotiationResponse = serde_json::from_str(&req.text().await?)?;
@@ -65,7 +67,9 @@ pub struct SignalrClient {
 }
 
 pub async fn create_client(url: &str, hub: &str) -> Result<SignalrClient, anyhow::Error> {
-    let negotiation = negotiate(url, hub).await?;
+    let client = reqwest::Client::builder().user_agent(UA).build()?;
+
+    let negotiation = negotiate(url, hub, client).await?;
 
     let url = Url::parse_with_params(
         &format!("wss://{}/connect", url),
@@ -86,10 +90,7 @@ pub async fn create_client(url: &str, hub: &str) -> Result<SignalrClient, anyhow
     let mut req: Request<()> = url.into_client_request()?;
 
     let headers = req.headers_mut();
-    headers.insert(
-        header::USER_AGENT,
-        HeaderValue::from_static("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"),
-    );
+    headers.insert(header::USER_AGENT, HeaderValue::from_static(UA));
     headers.insert(
         header::ACCEPT_ENCODING,
         HeaderValue::from_static("gzip,identity"),
