@@ -31,7 +31,7 @@ struct Negotiation {
     cookie: String,
 }
 
-const UA: &'static str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+const UA: &'static str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 
 async fn negotiate(url: &str, hub: &str, client: Client) -> Result<Negotiation, anyhow::Error> {
     let hub = ConnectionData([Connection {
@@ -45,7 +45,18 @@ async fn negotiate(url: &str, hub: &str, client: Client) -> Result<Negotiation, 
         &[("clientProtocol", "1.5"), ("connectionData", &hub_param)],
     )?;
 
-    let req = client.get(url).send().await?;
+    let req = client
+        .get(url)
+        .header("Accept-Language", "en-US,en;q=0.9")
+        .header("sec-ch-ua", "\"Chromium\";v=\"124\", \"Google Chrome\";v=\"124\", \"Not-A.Brand\";v=\"99\"")
+        .header("sec-ch-ua-mobile", "?0")
+        .header("sec-ch-ua-platform", "\"Windows\"")
+        .header("sec-fetch-dest", "empty")
+        .header("sec-fetch-mode", "cors")
+        .header("sec-fetch-site", "cross-site")
+        .header("Referer", "https://www.formula1.com/")
+        .send()
+        .await?;
 
     let headers = req.headers().clone();
     let res: NegotiationResponse = serde_json::from_str(&req.text().await?)?;

@@ -127,8 +127,8 @@ export function mapGapToUnit(gap: number, scale: GapScale): number {
 		const closeRange = Math.max(1, scale.battleSeconds);
 		const maxRange = Math.max(closeRange + 1, scale.spreadSeconds || closeRange * 4);
 
-		if (gap <= closeRange) return (gap / closeRange) * 0.58;
-		return Math.min(1, 0.58 + ((gap - closeRange) / (maxRange - closeRange)) * 0.42);
+		if (gap <= closeRange) return (gap / closeRange) * 0.38;
+		return Math.min(1, 0.38 + ((gap - closeRange) / (maxRange - closeRange)) * 0.62);
 	}
 
 	const base = scale.mode === "fixed" ? Math.max(1, scale.fixedSeconds) : Math.max(1, scale.spreadSeconds);

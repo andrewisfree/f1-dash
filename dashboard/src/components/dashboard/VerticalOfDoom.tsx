@@ -164,14 +164,14 @@ export default function VerticalOfDoom() {
 							<div key={tick} className="absolute right-0 left-0" style={{ top: y }}>
 								<div className="absolute left-3 h-px w-5 bg-zinc-700" />
 								<div className="absolute left-10 -translate-y-1/2 text-[10px] text-zinc-600 tabular-nums">{tick}s</div>
-								<div className="absolute right-0 left-20 h-px bg-zinc-900" />
+								<div className="absolute right-0 left-24 h-px bg-zinc-900" />
 							</div>
 						);
 					})}
 
 					{sessionPart && sessionPart < 3 && (
 						<div
-							className="absolute right-0 left-20 rounded-md border border-red-900/60 bg-red-950/20"
+							className="absolute right-0 left-24 rounded-md border border-red-900/60 bg-red-950/20"
 							style={{ top: "72%", bottom: 0 }}
 						>
 							<div className="p-2 text-xs font-medium text-red-400">Elimination zone</div>
@@ -182,13 +182,13 @@ export default function VerticalOfDoom() {
 						points.slice(1).map((point, index) => {
 							const previous = points[index];
 							const interval = point.gap - previous.gap;
-							if (interval < 1) return null;
+							if (interval <= 0) return null;
 
 							const catching = point.driver.IntervalToPositionAhead?.Catching;
 							return (
 								<div
 									key={`connector.${point.driver.RacingNumber}`}
-									className="absolute left-16 w-px"
+									className="absolute left-[17px] w-px"
 									style={{
 										top: previous.rawY,
 										height: Math.max(0, point.rawY - previous.rawY),
@@ -196,13 +196,13 @@ export default function VerticalOfDoom() {
 								>
 									<div
 										className={clsx("h-full w-px", {
-											"bg-emerald-500/70": catching === true,
-											"bg-red-500/70": catching === false,
-											"bg-zinc-700": catching === undefined,
+											"bg-emerald-500/40": catching === true,
+											"bg-red-500/40": catching === false,
+											"bg-zinc-700/60": catching === undefined,
 										})}
 									/>
 									<div
-										className={clsx("absolute top-1/2 left-2 -translate-y-1/2 text-[10px] tabular-nums", {
+										className={clsx("absolute top-1/2 left-4 -translate-y-1/2 rounded px-1 py-px text-[10px] font-medium tabular-nums whitespace-nowrap bg-zinc-950/90", {
 											"text-emerald-400": catching === true,
 											"text-red-400": catching === false,
 											"text-zinc-500": catching === undefined,
@@ -233,7 +233,7 @@ export default function VerticalOfDoom() {
 								/>
 								{Math.abs(labelPull) > 2 && (
 									<div
-										className="absolute left-6 w-10 border-t border-dashed border-zinc-700"
+										className="absolute left-6 w-20 border-t border-dashed border-zinc-700/50"
 										style={{
 											top: point.rawY,
 											transform: `translateY(${labelPull / 2}px) rotate(${labelPull > 0 ? 18 : -18}deg)`,
@@ -243,7 +243,7 @@ export default function VerticalOfDoom() {
 
 								<div
 									className={clsx(
-										"absolute right-0 left-20 grid min-h-8 grid-cols-[6.5rem_4rem_4rem_1fr_4rem_5rem] items-center gap-2 rounded-md border px-2 py-1 text-sm shadow-lg shadow-black/20",
+										"absolute right-0 left-24 grid min-h-8 grid-cols-[6.5rem_4rem_4rem_1fr_4rem_5rem] items-center gap-2 rounded-md border px-2 py-1 text-sm shadow-lg shadow-black/20",
 										{
 											"border-zinc-800 bg-zinc-900/95": !favorite && !danger,
 											"border-sky-700 bg-sky-950/60": favorite,
@@ -251,7 +251,7 @@ export default function VerticalOfDoom() {
 											"opacity-45": inactive,
 										},
 									)}
-									style={{ top: point.labelY - 16 }}
+									style={{ top: Math.max(0, point.labelY - 16) }}
 								>
 									<div className="flex items-center gap-2 overflow-hidden">
 										<span className="w-5 text-right text-xs text-zinc-500 tabular-nums">{driver.Position}</span>
