@@ -62,6 +62,7 @@ export default function DelayInput({ className, saveDelay }: Props) {
 			onKeyDown={(e) => e.code == "Enter" && updateDelay(true)}
 			onBlur={() => updateDelay(true)}
 			disabled={isPaused}
+			suppressHydrationWarning
 		/>
 	);
 }

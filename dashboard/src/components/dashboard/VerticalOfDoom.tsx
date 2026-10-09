@@ -54,7 +54,7 @@ function spreadLabels(points: Omit<DriverPoint, "labelY">[]): DriverPoint[] {
 	for (let i = placed.length - 1; i >= 0; i--) {
 		const next = placed[i + 1];
 		const maxY = next ? next.labelY - MIN_LABEL_GAP : TRACK_HEIGHT;
-		placed[i] = { ...placed[i], labelY: Math.min(placed[i].labelY - overflow, maxY) };
+		placed[i] = { ...placed[i], labelY: Math.min(placed[i].labelY, maxY) };
 	}
 
 	return placed;
