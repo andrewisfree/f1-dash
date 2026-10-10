@@ -1,13 +1,19 @@
 services:
   api:
+    image: f1-dash-api-local
+    restart: unless-stopped
     environment:
       - ORIGIN=http://localhost:3000;http://192.168.188.161:3000
 
   realtime:
+    image: f1-dash-realtime-local
+    restart: unless-stopped
     environment:
       - ORIGIN=http://localhost:3000;http://192.168.188.161:3000
 
   web:
+    image: f1-dash-web-local
+    restart: unless-stopped
     environment:
       - NEXT_PUBLIC_LIVE_URL=http://192.168.188.161:4000
       - API_URL=http://api:80

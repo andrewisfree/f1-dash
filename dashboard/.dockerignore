@@ -7,6 +7,8 @@ node_modules/
 .dockeringore
 
 .env
+.env.local
+.env.*.local
 .env.example
 
 dockerfile
