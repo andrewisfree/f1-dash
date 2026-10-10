@@ -59,6 +59,9 @@ type SettingsStore = {
 
 	verticalConnectors: boolean;
 	setVerticalConnectors: (verticalConnectors: boolean) => void;
+
+	verticalPitLoss: number;
+	setVerticalPitLoss: (verticalPitLoss: number) => void;
 };
 
 export const useSettingsStore = create<SettingsStore>()(
@@ -120,6 +123,9 @@ export const useSettingsStore = create<SettingsStore>()(
 
 				verticalConnectors: true,
 				setVerticalConnectors: (verticalConnectors: boolean) => set({ verticalConnectors }),
+
+				verticalPitLoss: 22,
+				setVerticalPitLoss: (verticalPitLoss: number) => set({ verticalPitLoss }),
 			}),
 			{
 				name: "settings-storage",

@@ -5,9 +5,13 @@ export type GapScaleMode = "battle" | "spread" | "fixed";
 export type GapScale = {
 	mode: GapScaleMode;
 	battleSeconds: number;
-	fixedSeconds: number;
-	spreadSeconds: number;
+	// range of gaps shown, relative to the reference driver (leader = 0)
+	lo: number;
+	hi: number;
 };
+
+// share of the track height given to the battle zone around the reference
+const BATTLE_SHARE = 0.38;
 
 export function parseGapSeconds(input?: string): number | null {
 	if (!input) return null;
@@ -35,6 +39,11 @@ export function parseGapSeconds(input?: string): number | null {
 	}
 
 	return null;
+}
+
+export function parseLapsDown(input?: string): number {
+	const match = input?.trim().match(/^\+?(\d+)\s*L(?:APS?)?$/i);
+	return match ? parseInt(match[1], 10) : 0;
 }
 
 export function parseLapSeconds(input?: string): number | null {
@@ -120,17 +129,29 @@ export function computeGapsSeconds(drivers: TimingDataDriver[], sessionPart?: nu
 	return gaps;
 }
 
-export function mapGapToUnit(gap: number, scale: GapScale): number {
-	if (!Number.isFinite(gap) || gap <= 0) return 0;
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
-	if (scale.mode === "battle") {
-		const closeRange = Math.max(1, scale.battleSeconds);
-		const maxRange = Math.max(closeRange + 1, scale.spreadSeconds || closeRange * 4);
+// maps a gap relative to the reference driver to a 0..1 position on the track
+export function createGapScale({ mode, battleSeconds, lo, hi }: GapScale): (rel: number) => number {
+	const span = hi - lo;
+	if (!Number.isFinite(span) || span <= 0) return () => 0;
 
-		if (gap <= closeRange) return (gap / closeRange) * 0.38;
-		return Math.min(1, 0.38 + ((gap - closeRange) / (maxRange - closeRange)) * 0.62);
-	}
+	const linear = (rel: number) => (Number.isFinite(rel) ? clamp((rel - lo) / span, 0, 1) : 0);
+	if (mode !== "battle") return linear;
 
-	const base = scale.mode === "fixed" ? Math.max(1, scale.fixedSeconds) : Math.max(1, scale.spreadSeconds);
-	return Math.min(1, gap / base);
+	const close = Math.max(1, battleSeconds);
+	const nearLo = Math.max(lo, -close);
+	const nearHi = Math.min(hi, close);
+	const near = nearHi - nearLo;
+	const far = span - near;
+	if (near <= 0 || far <= 0) return linear;
+
+	return (rel: number) => {
+		if (!Number.isFinite(rel)) return 0;
+
+		const value = clamp(rel, lo, hi);
+		const nearPart = clamp(value, nearLo, nearHi) - nearLo;
+		const farPart = value - lo - nearPart;
+		return (nearPart / near) * BATTLE_SHARE + (farPart / far) * (1 - BATTLE_SHARE);
+	};
 }

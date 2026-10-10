@@ -4,6 +4,7 @@ import { type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 
 import { useDataEngine } from '@/hooks/useDataEngine';
+import { useLapHistory } from '@/hooks/useLapHistory';
 import { useWakeLock } from '@/hooks/useWakeLock';
 import { useStores } from '@/hooks/useStores';
 import { useSocket } from '@/hooks/useSocket';
@@ -34,6 +35,7 @@ export default function DashboardLayout({ children }: Props) {
 	const syncing = delay > maxDelay;
 
 	useWakeLock();
+	useLapHistory();
 
 	const ended = useDataStore(({ state }) => state?.SessionStatus?.Status === 'Ends');
 

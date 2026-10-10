@@ -162,6 +162,17 @@ export default function SettingsPage() {
 				<p className="text-zinc-500">Show interval connectors</p>
 			</div>
 
+			<div className="mt-3 flex flex-wrap items-center gap-2">
+				<Input
+					value={String(settings.verticalPitLoss)}
+					setValue={(v) => {
+						const value = Number(v);
+						if (!isNaN(value)) settings.setVerticalPitLoss(value);
+					}}
+				/>
+				<p className="text-zinc-500">Seconds lost with a pit stop, used for the pit window of the selected driver</p>
+			</div>
+
 			<h2 className="my-4 text-2xl">Delay</h2>
 
 			<p className="mb-4">
