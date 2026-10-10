@@ -2,11 +2,18 @@
 
 import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
 
+export type LapChartPoint = {
+	lap: number;
+	value: number;
+	// green for an improvement, purple for the best
+	tone?: "improved" | "best";
+};
+
 export type LapChartSeries = {
 	key: string;
 	label: string;
 	color: string;
-	points: { lap: number; value: number }[];
+	points: LapChartPoint[];
 };
 
 type Props = {
@@ -14,10 +21,17 @@ type Props = {
 	format: (value: number) => string;
 	emptyText: string;
 	height?: number;
+	// keeps zero in view and draws it as the baseline
+	zero?: boolean;
+	// improvements glow along the line or are marked on the point
+	highlight?: "segments" | "markers";
+	tones?: { improved: string; best: string };
 };
 
 // chart surface, used for the ring around markers
 const SURFACE = "#09090b";
+const IMPROVED = "#34d399";
+const BEST = "#a78bfa";
 const MARGIN = { top: 10, right: 58, bottom: 22, left: 46 };
 const MIN_LABEL_GAP = 12;
 
@@ -37,7 +51,15 @@ function niceTicks(min: number, max: number, count: number): number[] {
 	return ticks;
 }
 
-export default function LapChart({ series, format, emptyText, height = 220 }: Props) {
+export default function LapChart({
+	series,
+	format,
+	emptyText,
+	height = 220,
+	zero = false,
+	highlight = "markers",
+	tones,
+}: Props) {
 	const containerRef = useRef<HTMLDivElement | null>(null);
 	const [width, setWidth] = useState<number>(0);
 	const [hoverLap, setHoverLap] = useState<number | null>(null);
@@ -59,8 +81,8 @@ export default function LapChart({ series, format, emptyText, height = 220 }: Pr
 		const values = all.map((point) => point.value);
 		const lapMin = Math.min(...laps);
 		const lapMax = Math.max(lapMin + 1, ...laps);
-		const rawMin = Math.min(...values);
-		const rawMax = Math.max(...values);
+		const rawMin = Math.min(...values, ...(zero ? [0] : []));
+		const rawMax = Math.max(...values, ...(zero ? [0] : []));
 		const padding = Math.max((rawMax - rawMin) * 0.1, 0.05);
 		const valueMin = rawMin - padding;
 		const valueMax = rawMax + padding;
@@ -73,16 +95,18 @@ export default function LapChart({ series, format, emptyText, height = 220 }: Pr
 		const lines = series
 			.filter((line) => line.points.length > 0)
 			.map((line) => {
+				const connected = (index: number) => index > 0 && line.points[index].lap - line.points[index - 1].lap === 1;
+				const at = (point: LapChartPoint) => `${x(point.lap).toFixed(1)},${y(point.value).toFixed(1)}`;
+
 				// a missing lap breaks the line instead of bridging it
-				const path = line.points
-					.map((point, index) => {
-						const connected = index > 0 && point.lap - line.points[index - 1].lap === 1;
-						return `${connected ? "L" : "M"}${x(point.lap).toFixed(1)},${y(point.value).toFixed(1)}`;
-					})
+				const path = line.points.map((point, index) => `${connected(index) ? "L" : "M"}${at(point)}`).join(" ");
+				// the laps that ended better than they started
+				const improved = line.points
+					.map((point, index) => (point.tone && connected(index) ? `M${at(line.points[index - 1])} L${at(point)}` : ""))
 					.join(" ");
 
 				const last = line.points[line.points.length - 1];
-				return { ...line, path, last, labelY: y(last.value) };
+				return { ...line, path, improved, last, labelY: y(last.value) };
 			});
 
 		// keep the end labels apart
@@ -106,7 +130,7 @@ export default function LapChart({ series, format, emptyText, height = 220 }: Pr
 			lapTicks,
 			valueTicks: niceTicks(valueMin, valueMax, 4),
 		};
-	}, [height, series, width]);
+	}, [height, series, width, zero]);
 
 	const onPointer = (event: PointerEvent<SVGRectElement>) => {
 		if (!chart) return;
@@ -123,18 +147,37 @@ export default function LapChart({ series, format, emptyText, height = 220 }: Pr
 					.filter((entry) => entry.point !== undefined)
 			: [];
 
+	const marked = (point: LapChartPoint) =>
+		point.tone === "best" || (point.tone === "improved" && highlight === "markers");
+
 	return (
 		<div>
-			{series.length > 1 && (
-				<div className="mb-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-400">
-					{series.map((line) => (
+			<div className="mb-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-400">
+				{series.length > 1 &&
+					series.map((line) => (
 						<span key={`legend.${line.key}`} className="flex items-center gap-1.5">
 							<span className="h-0.5 w-4 rounded-full" style={{ backgroundColor: line.color }} />
 							{line.label}
 						</span>
 					))}
-				</div>
-			)}
+
+				{tones && (
+					<>
+						<span className="flex items-center gap-1.5">
+							{highlight === "segments" ? (
+								<span className="h-1.5 w-4 rounded-full opacity-50" style={{ backgroundColor: IMPROVED }} />
+							) : (
+								<span className="h-2 w-2 rounded-full" style={{ backgroundColor: IMPROVED }} />
+							)}
+							{tones.improved}
+						</span>
+						<span className="flex items-center gap-1.5">
+							<span className="h-2 w-2 rounded-full" style={{ backgroundColor: BEST }} />
+							{tones.best}
+						</span>
+					</>
+				)}
+			</div>
 
 			<div ref={containerRef} className="relative" style={{ height }}>
 				{!chart && <div className="grid h-full place-items-center text-center text-sm text-zinc-600">{emptyText}</div>}
@@ -148,7 +191,7 @@ export default function LapChart({ series, format, emptyText, height = 220 }: Pr
 									x2={MARGIN.left + chart.plotWidth}
 									y1={chart.y(tick)}
 									y2={chart.y(tick)}
-									stroke="#27272a"
+									stroke={zero && tick === 0 ? "#71717a" : "#27272a"}
 									strokeWidth={1}
 								/>
 								<text
@@ -186,6 +229,19 @@ export default function LapChart({ series, format, emptyText, height = 220 }: Pr
 							/>
 						)}
 
+						{highlight === "segments" &&
+							chart.lines.map((line) => (
+								<path
+									key={`improved.${line.key}`}
+									d={line.improved}
+									fill="none"
+									stroke={IMPROVED}
+									strokeOpacity={0.45}
+									strokeWidth={8}
+									strokeLinecap="round"
+								/>
+							))}
+
 						{chart.lines.map((line) => (
 							<g key={`line.${line.key}`}>
 								<path
@@ -214,6 +270,22 @@ export default function LapChart({ series, format, emptyText, height = 220 }: Pr
 								</text>
 							</g>
 						))}
+
+						{chart.lines.flatMap((line) =>
+							line.points
+								.filter(marked)
+								.map((point) => (
+									<circle
+										key={`tone.${line.key}.${point.lap}`}
+										cx={chart.x(point.lap)}
+										cy={chart.y(point.value)}
+										r={4.5}
+										fill={point.tone === "best" ? BEST : IMPROVED}
+										stroke={SURFACE}
+										strokeWidth={2}
+									/>
+								)),
+						)}
 
 						{hovered.map(({ line, point }) => (
 							<circle
@@ -254,6 +326,15 @@ export default function LapChart({ series, format, emptyText, height = 220 }: Pr
 								<span className="h-0.5 w-3 rounded-full" style={{ backgroundColor: line.color }} />
 								<span className="font-semibold text-zinc-100 tabular-nums">{format(point!.value)}</span>
 								<span className="text-zinc-500">{line.label}</span>
+								{tones && point!.tone && (
+									<span className="flex items-center gap-1 text-zinc-300">
+										<span
+											className="h-1.5 w-1.5 rounded-full"
+											style={{ backgroundColor: point!.tone === "best" ? BEST : IMPROVED }}
+										/>
+										{tones[point!.tone]}
+									</span>
+								)}
 							</p>
 						))}
 					</div>

@@ -14,6 +14,7 @@ import { tireIcon } from "@/lib/tires";
 
 import { useDataStore } from "@/stores/useDataStore";
 import { useLapHistoryStore, type LapSample } from "@/stores/useLapHistoryStore";
+import { useRivalStore } from "@/stores/useRivalStore";
 import { useSettingsStore } from "@/stores/useSettingsStore";
 
 import { RaceControlMessage } from "@/components/dashboard/RaceControlMessage";
@@ -21,14 +22,18 @@ import RadioMessage from "@/components/dashboard/RadioMessage";
 import Badge from "@/components/driver/Badge";
 import DriverCarMetrics from "@/components/driver/DriverCarMetrics";
 import DriverHistoryTires from "@/components/driver/DriverHistoryTires";
-import LapChart, { type LapChartSeries } from "@/components/driver/LapChart";
+import LapChart, { type LapChartPoint, type LapChartSeries } from "@/components/driver/LapChart";
 import TrendText from "@/components/driver/TrendText";
 import Footer from "@/components/Footer";
 
-// chart colors follow the role, the selected driver and the cars around it
+// chart colors follow the role, the selected driver and the cars compared with it
+// green and purple are left to improved and best laps
 const COLOR_DRIVER = "#3987e5";
-const COLOR_AHEAD = "#d95926";
-const COLOR_BEHIND = "#199e70";
+const COLOR_AHEAD = "#c98500";
+const COLOR_BEHIND = "#d55181";
+
+// smaller changes of the gap are timing noise
+const MIN_GAIN = 0.02;
 
 const LAP_LOG_SIZE = 20;
 
@@ -39,6 +44,7 @@ type Props = {
 type Rival = {
 	driver: TimingDataDriver;
 	role: "ahead" | "behind";
+	pinned: boolean;
 	interval: number | null;
 	trend: Trend | null;
 };
@@ -62,23 +68,49 @@ function delta(own?: string, other?: string): number | null {
 	return a !== null && b !== null ? a - b : null;
 }
 
-// gap between two cars per lap, only for laps both have a known gap to the leader
-function gapSeries(own: LapSample[] | undefined, other: LapSample[] | undefined) {
+// gap to another car per lap, positive while that car is ahead
+// only for laps both have a known gap to the leader
+function gapSeries(own: LapSample[] | undefined, other: LapSample[] | undefined): LapChartPoint[] {
 	const otherByLap = new Map((other ?? []).map((sample) => [sample.lap, sample]));
 
-	return (own ?? []).flatMap((sample) => {
+	const points: LapChartPoint[] = (own ?? []).flatMap((sample) => {
 		const rival = otherByLap.get(sample.lap);
 		return sample.gap !== null && rival && rival.gap !== null
-			? [{ lap: sample.lap, value: Math.abs(sample.gap - rival.gap) }]
+			? [{ lap: sample.lap, value: sample.gap - rival.gap }]
 			: [];
 	});
+
+	// a falling value means time gained on the other car, whether it is ahead or behind
+	let best: LapChartPoint | null = null;
+	let bestGain = MIN_GAIN;
+
+	for (let i = 1; i < points.length; i++) {
+		if (points[i].lap - points[i - 1].lap !== 1) continue;
+
+		const gain = points[i - 1].value - points[i].value;
+		if (gain <= MIN_GAIN) continue;
+
+		points[i].tone = "improved";
+		if (gain > bestGain) {
+			best = points[i];
+			bestGain = gain;
+		}
+	}
+
+	if (best) best.tone = "best";
+	return points;
 }
 
 // laps with a pit stop or behind the safety car would flatten the rest of the chart
-function lapTimeSeries(samples: LapSample[] | undefined) {
-	return (samples ?? []).flatMap((sample) =>
-		sample.clean && sample.lapTime !== null ? [{ lap: sample.lap, value: sample.lapTime }] : [],
-	);
+function lapTimeSeries(samples: LapSample[] | undefined, fastest: number | null): LapChartPoint[] {
+	return (samples ?? []).flatMap((sample): LapChartPoint[] => {
+		if (!sample.clean || sample.lapTime === null) return [];
+
+		const isFastest = fastest !== null && Math.abs(sample.lapTime - fastest) < 0.0005;
+		const tone = isFastest ? "best" : sample.personalBest ? "improved" : undefined;
+
+		return [{ lap: sample.lap, value: sample.lapTime, tone }];
+	});
 }
 
 export default function DriverFocus({ nr: requested }: Props) {
@@ -87,6 +119,8 @@ export default function DriverFocus({ nr: requested }: Props) {
 	const history = useLapHistoryStore((store) => store.laps);
 	const favoriteDrivers = useSettingsStore((store) => store.favoriteDrivers);
 	const pitLoss = useSettingsStore((store) => store.verticalPitLoss);
+	const pinnedRival = useRivalStore((store) => store.rival);
+	const setPinnedRival = useRivalStore((store) => store.setRival);
 
 	const lines = state?.TimingData?.Lines;
 	const sessionPart = state?.TimingData?.SessionPart;
@@ -109,6 +143,8 @@ export default function DriverFocus({ nr: requested }: Props) {
 
 	const index = ordered.findIndex((driver) => driver.RacingNumber === nr);
 	const driver = ordered[index];
+	const pinned =
+		pinnedRival && pinnedRival !== nr ? ordered.find((entry) => entry.RacingNumber === pinnedRival) : undefined;
 
 	const rivals = useMemo(() => {
 		if (!driver) return [];
@@ -116,10 +152,15 @@ export default function DriverFocus({ nr: requested }: Props) {
 		// gaps to the leader only compare between cars on the lead lap
 		const comparable = (other: TimingDataDriver) => !isRace || (!isOffLeadLap(driver) && !isOffLeadLap(other));
 
-		return [
-			{ other: ordered[index - 1], role: "ahead" as const },
-			{ other: ordered[index + 1], role: "behind" as const },
-		].flatMap(({ other, role }): Rival[] => {
+		// a pinned rival stays compared however the positions change
+		const candidates: { other: TimingDataDriver | undefined; role: Rival["role"] }[] = pinned
+			? [{ other: pinned, role: parseInt(pinned.Position) < parseInt(driver.Position) ? "ahead" : "behind" }]
+			: [
+					{ other: ordered[index - 1], role: "ahead" },
+					{ other: ordered[index + 1], role: "behind" },
+				];
+
+		return candidates.flatMap(({ other, role }): Rival[] => {
 			if (!other) return [];
 
 			const interval = comparable(other)
@@ -131,9 +172,9 @@ export default function DriverFocus({ nr: requested }: Props) {
 					? describeTrend(history[behind.RacingNumber], history[ahead.RacingNumber], interval, lapsRemaining)
 					: null;
 
-			return [{ driver: other, role, interval, trend }];
+			return [{ driver: other, role, pinned: !!pinned, interval, trend }];
 		});
-	}, [driver, gaps, history, index, isRace, lapsRemaining, neutralized, ordered]);
+	}, [driver, gaps, history, index, isRace, lapsRemaining, neutralized, ordered, pinned]);
 
 	const leadLap = useMemo(
 		() =>
@@ -151,12 +192,21 @@ export default function DriverFocus({ nr: requested }: Props) {
 	const charts = useMemo(() => {
 		if (!nr) return { gap: [], lapTime: [] };
 
-		const label = (rival: Rival) => `${state?.DriverList?.[rival.driver.RacingNumber]?.Tla} (${rival.role})`;
-		const color = (rival: Rival) => (rival.role === "ahead" ? COLOR_AHEAD : COLOR_BEHIND);
+		const timingLines = state?.TimingData?.Lines;
+		const statsLines = state?.TimingStats?.Lines;
+		const name = (number: string) => state?.DriverList?.[number]?.Tla ?? number;
+		const label = (rival: Rival) =>
+			rival.pinned ? name(rival.driver.RacingNumber) : `${name(rival.driver.RacingNumber)} (${rival.role})`;
+		const color = (rival: Rival) => (rival.pinned || rival.role === "ahead" ? COLOR_AHEAD : COLOR_BEHIND);
+		// the fastest lap of the session, if this driver holds it
+		const fastest = (number: string) =>
+			statsLines?.[number]?.PersonalBestLapTime?.Position === 1
+				? parseLapSeconds(timingLines?.[number]?.BestLapTime?.Value)
+				: null;
 
 		const gap: LapChartSeries[] = rivals.map((rival) => ({
 			key: rival.role,
-			label: `Gap to ${label(rival)}`,
+			label: label(rival),
 			color: color(rival),
 			points: gapSeries(history[nr], history[rival.driver.RacingNumber]),
 		}));
@@ -164,20 +214,20 @@ export default function DriverFocus({ nr: requested }: Props) {
 		const lapTime: LapChartSeries[] = [
 			{
 				key: "driver",
-				label: state?.DriverList?.[nr]?.Tla ?? nr,
+				label: name(nr),
 				color: COLOR_DRIVER,
-				points: lapTimeSeries(history[nr]),
+				points: lapTimeSeries(history[nr], fastest(nr)),
 			},
 			...rivals.map((rival) => ({
 				key: rival.role,
 				label: label(rival),
 				color: color(rival),
-				points: lapTimeSeries(history[rival.driver.RacingNumber]),
+				points: lapTimeSeries(history[rival.driver.RacingNumber], fastest(rival.driver.RacingNumber)),
 			})),
 		];
 
 		return { gap, lapTime };
-	}, [history, nr, rivals, state?.DriverList]);
+	}, [history, nr, rivals, state?.DriverList, state?.TimingData?.Lines, state?.TimingStats?.Lines]);
 
 	if (!state?.TimingData || !state.DriverList || !driver || !nr) {
 		return (
@@ -211,11 +261,11 @@ export default function DriverFocus({ nr: requested }: Props) {
 	const topSpeed = (stats?.BestSpeeds as Record<string, { Value: string; Position?: number }> | undefined)?.ST;
 	const samples = history[nr] ?? [];
 	const lapLog = samples.slice(-LAP_LOG_SIZE).reverse();
-	const rivalGap = (sample: LapSample, role: Rival["role"]) => {
-		const rival = rivals.find((entry) => entry.role === role);
-		const other = rival && history[rival.driver.RacingNumber]?.find((entry) => entry.lap === sample.lap);
-		return sample.gap !== null && other && other.gap !== null ? Math.abs(sample.gap - other.gap).toFixed(3) : "-";
-	};
+	const lapTimes = new Map(charts.lapTime[0]?.points.map((point) => [point.lap, point]));
+	const gapColumns = charts.gap.map((series) => ({
+		series,
+		byLap: new Map(series.points.map((point) => [point.lap, point])),
+	}));
 
 	const messages = (state.RaceControlMessages?.Messages ?? [])
 		.filter((msg) => new RegExp(`\\b${nr} \\(`).test(msg.Message))
@@ -348,7 +398,26 @@ export default function DriverFocus({ nr: requested }: Props) {
 				)}
 			</div>
 
-			<div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
+			<label className="flex flex-wrap items-center gap-2 rounded-lg border border-zinc-800 px-3 py-2 text-sm">
+				<span className="text-zinc-500">Compare with</span>
+				<select
+					className="rounded-lg bg-zinc-900 px-2 py-1.5 text-sm"
+					value={pinned?.RacingNumber ?? ""}
+					onChange={(event) => setPinnedRival(event.target.value || null)}
+				>
+					<option value="">The cars ahead and behind</option>
+					{ordered
+						.filter((entry) => entry.RacingNumber !== nr)
+						.map((entry) => (
+							<option key={`rival.option.${entry.RacingNumber}`} value={entry.RacingNumber}>
+								P{entry.Position} {tla(entry.RacingNumber)}
+							</option>
+						))}
+				</select>
+				{pinned && <span className="text-zinc-500">stays fixed when positions change</span>}
+			</label>
+
+			<div className={clsx("grid grid-cols-1 gap-2", { "lg:grid-cols-2": rivals.length > 1 })}>
 				{rivals.map((rival) => {
 					const other = rival.driver;
 					const otherStints = state.TimingAppData?.Lines[other.RacingNumber]?.Stints ?? [];
@@ -358,7 +427,19 @@ export default function DriverFocus({ nr: requested }: Props) {
 					const bestLap = delta(driver.BestLapTime?.Value, other.BestLapTime?.Value);
 
 					return (
-						<Card key={`rival.${rival.role}`} title={rival.role === "ahead" ? "Car ahead" : "Car behind"}>
+						<Card
+							key={`rival.${rival.role}`}
+							title={`${rival.pinned ? "Pinned rival, " : "Car "}${rival.role}`}
+							action={
+								<button
+									type="button"
+									className="cursor-pointer rounded border border-zinc-700 px-1.5 text-xs text-zinc-400"
+									onClick={() => setPinnedRival(rival.pinned ? null : other.RacingNumber)}
+								>
+									{rival.pinned ? "Unpin" : "Pin"}
+								</button>
+							}
+						>
 							<div className="flex flex-wrap items-center justify-between gap-2">
 								<Link href={`/dashboard/driver/${other.RacingNumber}`} className="flex items-center gap-2">
 									<span className="text-sm text-zinc-500 tabular-nums">P{other.Position}</span>
@@ -444,10 +525,19 @@ export default function DriverFocus({ nr: requested }: Props) {
 
 			{isRace && (
 				<div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
-					<Card title="Gap to the cars around, seconds">
+					<Card
+						title={
+							pinned
+								? `Gap to ${tla(pinned.RacingNumber)} in seconds, above zero ${tla(pinned.RacingNumber)} is ahead`
+								: `Gap in seconds, above zero the other car is ahead of ${tla(nr)}`
+						}
+					>
 						<LapChart
 							series={charts.gap}
-							format={(value) => value.toFixed(1)}
+							format={(value) => formatSigned(value, 1)}
+							zero
+							highlight="segments"
+							tones={{ improved: `${tla(nr)} gained`, best: "Biggest gain" }}
 							emptyText="Gaps are recorded lap by lap while the dashboard is open."
 						/>
 					</Card>
@@ -456,6 +546,8 @@ export default function DriverFocus({ nr: requested }: Props) {
 						<LapChart
 							series={charts.lapTime}
 							format={formatLap}
+							highlight="markers"
+							tones={{ improved: "Personal best", best: "Fastest lap" }}
 							emptyText="Lap times are recorded lap by lap while the dashboard is open."
 						/>
 					</Card>
@@ -473,8 +565,11 @@ export default function DriverFocus({ nr: requested }: Props) {
 									<th className="text-left font-normal">Lap</th>
 									<th className="font-normal">Pos</th>
 									<th className="font-normal">Time</th>
-									<th className="font-normal">Ahead</th>
-									<th className="font-normal">Behind</th>
+									{gapColumns.map(({ series }) => (
+										<th key={`gap.head.${series.key}`} className="font-normal">
+											{series.label}
+										</th>
+									))}
 								</tr>
 							</thead>
 							<tbody>
@@ -482,9 +577,18 @@ export default function DriverFocus({ nr: requested }: Props) {
 									<tr key={`lap.${sample.lap}`} className={clsx({ "text-zinc-500": !sample.clean })}>
 										<td className="text-left">{sample.lap}</td>
 										<td>P{sample.position}</td>
-										<td>{sample.lapTime !== null ? formatLap(sample.lapTime) : "-"}</td>
-										<td>{rivalGap(sample, "ahead")}</td>
-										<td>{rivalGap(sample, "behind")}</td>
+										<td className={toneClass(lapTimes.get(sample.lap)?.tone)}>
+											{sample.lapTime !== null ? formatLap(sample.lapTime) : "-"}
+										</td>
+										{gapColumns.map(({ series, byLap }) => {
+											const point = byLap.get(sample.lap);
+
+											return (
+												<td key={`gap.${series.key}`} className={toneClass(point?.tone)}>
+													{point ? formatSigned(point.value) : "-"}
+												</td>
+											);
+										})}
 									</tr>
 								))}
 							</tbody>
@@ -528,13 +632,28 @@ export default function DriverFocus({ nr: requested }: Props) {
 	);
 }
 
-function Card({ title, className, children }: { title: string; className?: string; children: ReactNode }) {
+type CardProps = {
+	title: string;
+	action?: ReactNode;
+	className?: string;
+	children: ReactNode;
+};
+
+function Card({ title, action, className, children }: CardProps) {
 	return (
 		<div className={clsx("rounded-lg border border-zinc-800 p-3", className)}>
-			<p className="mb-2 text-xs text-zinc-500">{title}</p>
+			<div className="mb-2 flex items-center justify-between gap-2">
+				<p className="text-xs text-zinc-500">{title}</p>
+				{action}
+			</div>
 			{children}
 		</div>
 	);
+}
+
+// purple for the best, green for an improvement
+function toneClass(tone: LapChartPoint["tone"]) {
+	return clsx({ "text-violet-400": tone === "best", "text-emerald-400": tone === "improved" });
 }
 
 function Tile({ label, note, children }: { label: string; note?: string; children: ReactNode }) {

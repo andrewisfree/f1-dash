@@ -96,6 +96,7 @@ export const useLapHistory = () => {
 						position: parseInt(driver.Position),
 						gap: lapped ? null : (gaps?.get(nr) ?? null),
 						lapTime: parseLapSeconds(driver.LastLapTime?.Value),
+						personalBest: !!(driver.LastLapTime?.PersonalFastest || driver.LastLapTime?.OverallFastest),
 						stint: state.TimingAppData?.Lines?.[nr]?.Stints?.length ?? 0,
 						clean: tracker.pending.clean,
 					};

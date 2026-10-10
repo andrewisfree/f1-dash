@@ -7,6 +7,8 @@ export type LapSample = {
 	// gap to the leader in seconds when the lap was completed, null if lapped or unknown
 	gap: number | null;
 	lapTime: number | null;
+	// the lap improved the best of the driver when it was set
+	personalBest?: boolean;
 	stint: number;
 	// false if the lap had a pit stop or was run under safety car, vsc or red flag
 	clean: boolean;
