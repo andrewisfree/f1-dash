@@ -27,6 +27,8 @@ Storico degli interventi su deploy e infrastruttura di f1-dash. Voce più recent
 
 **Stato finale**
 - LXC 108 acceso, ~230 MB di RAM usati. Disco: 843 MB liberi su 7,8 GB (erano 888).
+- Ore 17:21: LXC 108 **spento** su richiesta (`POST .../lxc/108/status/shutdown`). Host: 752 MB liberi su 3363
+  (erano 126). Per riaccenderlo: `POST /nodes/bahlbee/lxc/108/status/start`, lo stack riparte da solo.
 
 **Da fare / aperto**
 - I commit locali non sono ancora inviati a GitHub.
