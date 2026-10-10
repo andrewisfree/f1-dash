@@ -28,6 +28,10 @@ const liveTimingItems = [
 		name: "Vertical",
 	},
 	{
+		href: "/dashboard/driver",
+		name: "Driver",
+	},
+	{
 		href: "/dashboard/standings",
 		name: "Standings",
 	},
@@ -169,7 +173,8 @@ type ItemProps = {
 };
 
 const Item = ({ target, item }: ItemProps) => {
-	const active = usePathname() === item.href;
+	const pathname = usePathname();
+	const active = pathname === item.href || (item.href === "/dashboard/driver" && pathname.startsWith(`${item.href}/`));
 
 	return (
 		<Link href={item.href} target={target}>

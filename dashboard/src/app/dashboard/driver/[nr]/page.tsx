@@ -1,7 +1,11 @@
+"use client";
+
+import { useParams } from "next/navigation";
+
+import DriverFocus from "@/components/driver/DriverFocus";
+
 export default function DriverPage() {
-	return (
-		<div>
-			<p>comming soon</p>
-		</div>
-	);
+	const { nr } = useParams<{ nr: string }>();
+
+	return <DriverFocus nr={nr} />;
 }
