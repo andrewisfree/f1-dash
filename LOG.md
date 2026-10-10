@@ -52,8 +52,8 @@ voce nella sidebar, file fermi alle 15:59). `docker build` impacchetta la cartel
 - Disco LXC 108: 887 MB liberi su 7,8 GB.
 
 **Da fare / aperto**
-- Modifiche non committate di questo intervento: `compose.proxmox.yaml`, `dashboard/.dockerignore`, `CLAUDE.md`,
-  `LOG.md`. (Nella cartella di lavoro ci sono anche i file della pagina Qualifying e `recordings/`, di un altro lavoro.)
+- Le modifiche di questo intervento sono nel commit `cb67c6c` (non ancora inviato a GitHub). Restano fuori dal
+  commit i file della pagina Qualifying e `recordings/`, che appartengono a un altro lavoro in corso.
 - Se la pagina Qualifying cambia ancora, Proxmox va riaggiornato con la procedura in `CLAUDE.md`.
 - Spegnere il 108 a fine weekend di gara per liberare memoria all'host.
 - Quando il nuovo stack è confermato, si può eliminare il vecchio (`/opt/f1-dash`, immagini `ghcr.io/slowlydev/*`
