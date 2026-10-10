@@ -2,12 +2,12 @@ services:
   api:
     image: f1-dash-api-local
     environment:
-      - ORIGIN=http://localhost:3000;http://192.168.188.161:3000
+      - ORIGIN=http://localhost:3000;http://192.168.188.150:3000;http://192.168.188.161:3000
 
   realtime:
     image: f1-dash-realtime-local
     environment:
-      - ORIGIN=http://localhost:3000;http://192.168.188.161:3000
+      - ORIGIN=http://localhost:3000;http://192.168.188.150:3000;http://192.168.188.161:3000
 
   web:
     image: f1-dash-web-local

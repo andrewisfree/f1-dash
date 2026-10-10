@@ -1,18 +1,17 @@
 @echo off
 title F1 Dashboard - Avvio
-chcp 65001 >nul 2>&1
 
 echo.
-echo  ╔══════════════════════════════╗
-echo  ║   F1 DASHBOARD - Avvio...   ║
-echo  ╚══════════════════════════════╝
+echo  ================================
+echo    F1 DASHBOARD - Avvio...
+echo  ================================
 echo.
 
 :: Vai alla directory del progetto
 cd /d "D:\PyProg\f1-dash"
 
 :: Avvia i servizi backend con Docker
-echo [1/3] Avvio servizi backend (API + Realtime)...
+echo [1/3] Avvio servizi backend - API e Realtime...
 docker compose up -d api realtime
 if errorlevel 1 (
     echo ERRORE: Docker non disponibile o compose fallito.
@@ -20,6 +19,9 @@ if errorlevel 1 (
     pause
     exit /b 1
 )
+
+:: Il container web occupa la porta 3000 usata dal frontend qui sotto
+docker compose stop web >nul 2>&1
 
 echo.
 echo [2/3] Avvio frontend...
@@ -31,10 +33,11 @@ timeout /t 12 /nobreak >nul
 start http://localhost:3000
 
 echo.
-echo  ╔══════════════════════════════════╗
-echo  ║  F1 Dashboard in esecuzione!    ║
-echo  ║  http://localhost:3000          ║
-echo  ╚══════════════════════════════════╝
+echo  ====================================
+echo    F1 Dashboard in esecuzione!
+echo    PC:        http://localhost:3000
+echo    Cellulare: http://192.168.188.150:3000
+echo  ====================================
 echo.
 echo Questa finestra puo' essere chiusa.
 timeout /t 5 /nobreak >nul
