@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from 'motion/react';
 
 import { useDataEngine } from '@/hooks/useDataEngine';
 import { useLapHistory } from '@/hooks/useLapHistory';
+import { useQualifyingTracker } from '@/hooks/useQualifyingTracker';
 import { useWakeLock } from '@/hooks/useWakeLock';
 import { useStores } from '@/hooks/useStores';
 import { useSocket } from '@/hooks/useSocket';
@@ -36,6 +37,7 @@ export default function DashboardLayout({ children }: Props) {
 
 	useWakeLock();
 	useLapHistory();
+	useQualifyingTracker();
 
 	const ended = useDataStore(({ state }) => state?.SessionStatus?.Status === 'Ends');
 

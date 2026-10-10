@@ -11,3 +11,6 @@ compose.env
 
 # data
 *.data.*
+
+# recorded sessions
+recordings/*.tsv

@@ -1,7 +1,8 @@
 # f1-dash (fork personale)
 
 Fork di [slowlydev/f1-dash](https://github.com/slowlydev/f1-dash) con funzioni aggiunte nella dashboard:
-Vertical of Doom (`/dashboard/vertical`) e pagina pilota (`/dashboard/driver/[nr]`).
+Vertical of Doom (`/dashboard/vertical`), pagina pilota (`/dashboard/driver/[nr]`) e modalità qualifica
+(`/dashboard/qualifying`).
 
 ## Repository
 
@@ -70,6 +71,14 @@ Controllo: la pagina `http://192.168.188.161:3000/dashboard` deve contenere
 ⚠️ `dashboard/.env.local` **non deve entrare nell'immagine**: Next.js incorpora le variabili `NEXT_PUBLIC_*`
 durante la build e a quel punto il valore a runtime viene ignorato (la dashboard su Proxmox puntava al realtime
 del PC). Per questo `.env.local` è in `dashboard/.dockerignore`.
+
+## Registrazioni del feed
+
+`recordings/` contiene gli strumenti per registrare e riprodurre una sessione reale (i file `.tsv` non sono in git):
+
+- `node recordings/record.js <file.tsv> <minuti>` registra `localhost:4000/api/realtime`, un evento per riga.
+- `node recordings/make-replay.js <file.tsv> <out.json> <da_secondi|-1> <durata_secondi>` estrae lo stato a un
+  certo punto più gli eventi successivi, da riprodurre nel browser per provare le pagine senza una sessione live.
 
 Lo storico degli interventi è in [LOG.md](LOG.md): aggiungere una voce a ogni modifica di deploy o infrastruttura.
 
