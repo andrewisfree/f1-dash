@@ -2,6 +2,36 @@
 
 Storico degli interventi su deploy e infrastruttura di f1-dash. Voce più recente in alto.
 
+## 2026-10-10 — Modalità qualifica su Proxmox
+
+**Obiettivo**: portare su Proxmox la pagina Qualifying completata (`/dashboard/qualifying`).
+
+**Versione installata**: commit `7ef616a`, costruita con la cartella di lavoro pulita (ore 16:50 circa).
+
+**Sul PC**
+- Committata la modalità qualifica (tabellone con linea di taglio, stato dei piloti, ultima chiamata, pannello dei
+  giri lanciati) e gli strumenti in `recordings/`.
+- Ricostruita `f1-dash-web-local` dal commit. `api` e `realtime` non toccate.
+
+**Su Proxmox**
+- Caricata la sola immagine web con `docker save | gzip | ssh | docker load`, copiati i due file compose,
+  `docker compose up -d`: ricreato solo il container `web`.
+- Niente cancellato: l'immagine web precedente resta senza nome sul container.
+
+**Verifiche**
+- `/dashboard`, `/dashboard/qualifying`, `/dashboard/vertical`, `/dashboard/driver`, `/dashboard/driver/16`,
+  `/schedule` rispondono 200 su `192.168.188.161:3000`.
+- La pagina espone `NEXT_PUBLIC_LIVE_URL = http://192.168.188.161:4000`, nessun riferimento a `.150`.
+- Realtime: `/api/drivers` 200 con CORS corretto, lo stream invia l'evento `initial`. API: `/api/schedule/next` 200.
+- Non verificato: la resa a schermo con dati live su Proxmox e l'accesso via Twingate.
+
+**Stato finale**
+- LXC 108 acceso, ~230 MB di RAM usati. Disco: 843 MB liberi su 7,8 GB (erano 888).
+
+**Da fare / aperto**
+- I commit locali non sono ancora inviati a GitHub.
+- Restano validi i punti aperti della voce precedente (spegnere il 108 a fine weekend, vecchio stack da eliminare).
+
 ## 2026-10-10 — Proxmox allineato alla versione del PC
 
 **Obiettivo**: portare l'installazione su Proxmox (LXC 108, `192.168.188.161`) alla stessa versione del PC di
