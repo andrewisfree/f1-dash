@@ -1,7 +1,9 @@
 import type { ReactNode } from "react";
 import clsx from "clsx";
 
-import type { Stint } from "@/types/state.type";
+import type { Sector, Stint } from "@/types/state.type";
+
+import type { PushLap, PushSector } from "@/lib/qualifyingBoard";
 
 import { formatSigned } from "@/lib/race";
 import {
@@ -12,6 +14,7 @@ import {
 	TONE_CHIP,
 	TONE_FILL,
 	TONE_TEXT,
+	segmentFill,
 	tyreWear,
 	type Tone,
 } from "@/lib/tones";
@@ -156,6 +159,44 @@ export function StintStrip({ stints, degradation }: StintStripProps) {
 								{formatSigned(deg, 2)}
 							</span>
 						)}
+					</div>
+				);
+			})}
+		</div>
+	);
+}
+
+const PUSH_TONE: Record<NonNullable<PushSector["tone"]>, Tone> = { best: "best", improved: "gain", slower: "warn" };
+
+/**
+ * the mini sectors of the lap in progress, with the time of every sector done and what it lost to the best
+ */
+export function MiniSectors({ sectors, push }: { sectors: Sector[]; push: PushLap | null }) {
+	return (
+		<div className="grid grid-cols-3 gap-1.5">
+			{sectors.slice(0, 3).map((sector, index) => {
+				const info = push?.sectors[index];
+				const tone: Tone = info?.done && info.tone ? PUSH_TONE[info.tone] : sector.Value ? "neutral" : "excluded";
+
+				return (
+					<div key={`mini.${index}`}>
+						<div className="flex gap-px">
+							{(sector.Segments ?? []).map((segment, segmentIndex) => (
+								<span
+									key={`segment.${segmentIndex}`}
+									className={clsx("h-2 flex-1 rounded-full", segmentFill(segment.Status))}
+								/>
+							))}
+						</div>
+						<p
+							className={clsx(
+								"mt-1 rounded px-1 py-0.5 text-center text-xs font-semibold tabular-nums",
+								TONE_CHIP[tone],
+							)}
+						>
+							{info?.done && info.time !== null ? info.time.toFixed(3) : sector.Value || `S${index + 1}`}
+							{info?.loss != null && <span className="ml-1 font-normal opacity-70">{formatSigned(info.loss, 2)}</span>}
+						</p>
 					</div>
 				);
 			})}

@@ -99,6 +99,11 @@ export function getRemainingMs(clock: ExtrapolatedClock | undefined, now: number
 	return Math.max(0, remaining - (now - new Date(clock.Utc).getTime()));
 }
 
+export function formatClock(ms: number) {
+	const seconds = Math.max(0, Math.ceil(ms / 1000));
+	return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+}
+
 export type BoardState = "safe" | "bubble" | "out" | "eliminated" | "none";
 
 export type BoardRow = {

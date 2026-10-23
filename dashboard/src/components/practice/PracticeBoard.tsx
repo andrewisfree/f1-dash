@@ -1,38 +1,23 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import clsx from "clsx";
 
 import { getTrackStatusMessage } from "@/lib/getTrackStatusMessage";
 import { classifyLaps, getLongRuns, type PracticeLap } from "@/lib/practice";
-import { getRemainingMs } from "@/lib/qualifyingBoard";
+import { formatClock, getRemainingMs } from "@/lib/qualifyingBoard";
 
 import { useDataStore } from "@/stores/useDataStore";
 import { useLapHistoryStore } from "@/stores/useLapHistoryStore";
 import { useSettingsStore } from "@/stores/useSettingsStore";
+
+import { useNow } from "@/hooks/useNow";
 
 import BestLaps from "@/components/practice/BestLaps";
 import type { Compound } from "@/components/practice/CompoundFilter";
 import LongRuns from "@/components/practice/LongRuns";
 
 const COMPOUND_ORDER: Compound[] = ["SOFT", "MEDIUM", "HARD", "INTERMEDIATE", "WET"];
-
-function useNow(interval: number) {
-	const [now, setNow] = useState<number>(() => Date.now());
-
-	useEffect(() => {
-		const timer = setInterval(() => setNow(Date.now()), interval);
-		return () => clearInterval(timer);
-	}, [interval]);
-
-	return now;
-}
-
-function formatClock(ms: number) {
-	const seconds = Math.max(0, Math.ceil(ms / 1000));
-	const minutes = Math.floor(seconds / 60);
-	return `${minutes}:${String(seconds % 60).padStart(2, "0")}`;
-}
 
 export default function PracticeBoard() {
 	const state = useDataStore((store) => store.state);

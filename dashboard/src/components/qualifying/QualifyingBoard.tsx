@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import Image from "next/image";
 import clsx from "clsx";
 
@@ -10,6 +10,7 @@ import { getTrackStatusMessage } from "@/lib/getTrackStatusMessage";
 import {
 	BUBBLE_SECONDS,
 	buildBoard,
+	formatClock,
 	getBestSectors,
 	getDeletedLaps,
 	getLapPhase,
@@ -29,6 +30,8 @@ import { useDataStore } from "@/stores/useDataStore";
 import { useQualifyingStore } from "@/stores/useQualifyingStore";
 import { useSettingsStore } from "@/stores/useSettingsStore";
 
+import { useNow } from "@/hooks/useNow";
+
 import Badge from "@/components/driver/Badge";
 import PushLaps from "@/components/qualifying/PushLaps";
 import SectorBlock from "@/components/qualifying/SectorBlock";
@@ -43,22 +46,6 @@ const PHASE_LABEL: Record<LapPhase, string> = {
 	slow: "SLOW",
 	stopped: "STOP",
 };
-
-function useNow(interval: number) {
-	const [now, setNow] = useState<number>(() => Date.now());
-
-	useEffect(() => {
-		const timer = setInterval(() => setNow(Date.now()), interval);
-		return () => clearInterval(timer);
-	}, [interval]);
-
-	return now;
-}
-
-function formatClock(ms: number) {
-	const seconds = Math.max(0, Math.ceil(ms / 1000));
-	return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
-}
 
 export default function QualifyingBoard() {
 	const state = useDataStore((store) => store.state);

@@ -9,7 +9,14 @@ import { computeGapsSeconds, getOrderedTimingDrivers, parseLapSeconds } from "@/
 import { getTrackStatusMessage } from "@/lib/getTrackStatusMessage";
 import { buildCarView, getMode, type CarView } from "@/lib/pitwall";
 import { classifyLaps, formatLapTime, getLongRuns } from "@/lib/practice";
-import { buildBoard, getBestSectors, getPushLap } from "@/lib/qualifyingBoard";
+import {
+	buildBoard,
+	formatClock,
+	getBestSectors,
+	getOutLapMs,
+	getPushLap,
+	getRemainingMs,
+} from "@/lib/qualifyingBoard";
 import { formatSigned, isNeutralized, isOffLeadLap } from "@/lib/race";
 import { getDriverFlags } from "@/lib/raceControl";
 import { degradationTone, TONE_TEXT } from "@/lib/tones";
@@ -17,7 +24,10 @@ import { degradationTone, TONE_TEXT } from "@/lib/tones";
 import { useDataStore } from "@/stores/useDataStore";
 import { useLapHistoryStore } from "@/stores/useLapHistoryStore";
 import { usePitWallStore } from "@/stores/usePitWallStore";
+import { useQualifyingStore } from "@/stores/useQualifyingStore";
 import { useSettingsStore } from "@/stores/useSettingsStore";
+
+import { useNow } from "@/hooks/useNow";
 
 import { RaceControlMessage } from "@/components/dashboard/RaceControlMessage";
 import RadioMessage from "@/components/dashboard/RadioMessage";
@@ -33,6 +43,9 @@ export default function PitWall() {
 	const pitLoss = useSettingsStore((store) => store.verticalPitLoss);
 	const selectedTeam = usePitWallStore((store) => store.team);
 	const setTeam = usePitWallStore((store) => store.setTeam);
+	const delay = useSettingsStore((store) => store.delay);
+	const outLaps = useQualifyingStore((store) => store.outLaps);
+	const now = useNow(1000);
 
 	const lines = state?.TimingData?.Lines;
 	const drivers = state?.DriverList;
@@ -129,6 +142,12 @@ export default function PitWall() {
 	const weather = state.WeatherData;
 	const raining = weather?.Rainfall !== undefined && weather.Rainfall !== "0";
 
+	// the state shown is delayed, so is its clock
+	const remaining = mode === "qualifying" ? getRemainingMs(state.ExtrapolatedClock, now - delay * 1000) : null;
+	const outLap = getOutLapMs(outLaps, board.fastest);
+	const lastCall =
+		remaining !== null && outLap !== null && state.SessionStatus?.Status === "Started" ? remaining - outLap : null;
+
 	return (
 		<>
 			<div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-zinc-800 p-2">
@@ -167,6 +186,23 @@ export default function PitWall() {
 							Track {weather.TrackTemp}° · Air {weather.AirTemp}° · Wind {weather.WindSpeed} m/s
 						</span>
 					)}
+					{remaining !== null && (
+						<span className="font-semibold text-zinc-200 tabular-nums">
+							{board.part ? `Q${board.part} ` : ""}
+							{formatClock(remaining)}
+						</span>
+					)}
+					{lastCall !== null && (
+						<span
+							className={clsx("rounded px-1.5 py-0.5 font-semibold tabular-nums", {
+								"bg-zinc-800 text-zinc-200": lastCall > 60_000,
+								"bg-amber-500/20 text-amber-300": lastCall > 0 && lastCall <= 60_000,
+								"bg-red-500/20 text-red-300": lastCall <= 0,
+							})}
+						>
+							{lastCall > 0 ? `Last call ${formatClock(lastCall)}` : "Too late to start a lap"}
+						</span>
+					)}
 					{raining && <span className="rounded bg-sky-500/20 px-1.5 py-0.5 font-semibold text-sky-300">RAIN</span>}
 				</div>
 			</div>
@@ -192,6 +228,7 @@ export default function PitWall() {
 										? getPushLap(row, getBestSectors(state.TimingStats, car.nr), board.rows)
 										: null,
 								cutoff: board.cutoff,
+								lastCall,
 							}}
 						/>
 					);

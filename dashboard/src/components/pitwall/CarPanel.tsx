@@ -7,7 +7,7 @@ import type { Driver, Stint, TimingStatsDriver } from "@/types/state.type";
 import type { DriverFlags } from "@/lib/raceControl";
 import type { Battle, CarView, Mode } from "@/lib/pitwall";
 import { formatLapTime } from "@/lib/practice";
-import type { BoardRow, PushLap } from "@/lib/qualifyingBoard";
+import { formatClock, type BoardRow, type PushLap } from "@/lib/qualifyingBoard";
 import { describeStatus, formatSigned } from "@/lib/race";
 import { tireIcon } from "@/lib/tires";
 import {
@@ -25,10 +25,12 @@ import {
 
 import Badge from "@/components/driver/Badge";
 import TrendText from "@/components/driver/TrendText";
-import { Chip, GapBar, StintStrip, Tile, TyreWearBar } from "@/components/panel/Panel";
+import { Chip, GapBar, MiniSectors, StintStrip, Tile, TyreWearBar } from "@/components/panel/Panel";
 
 // laps shown as coloured chips under the tiles
 const LAP_STRIP = 12;
+// below this the last call is close
+const LAST_CALL_WARNING_MS = 60_000;
 
 const BOARD_TONE: Record<BoardRow["state"], Tone> = {
 	safe: "gain",
@@ -46,7 +48,13 @@ type Props = {
 	flags: DriverFlags | undefined;
 	tla: (nr: string) => string;
 	pitLoss: number;
-	qualifying: { row: BoardRow | null; push: PushLap | null; cutoff: number | undefined };
+	qualifying: {
+		row: BoardRow | null;
+		push: PushLap | null;
+		cutoff: number | undefined;
+		// time left to leave the pits and still start a lap, null when unknown
+		lastCall: number | null;
+	};
 };
 
 export default function CarPanel({ car, mode, meta, stats, flags, tla, pitLoss, qualifying }: Props) {
@@ -130,7 +138,13 @@ export default function CarPanel({ car, mode, meta, stats, flags, tla, pitLoss, 
 							tone={qualifying.row ? BOARD_TONE[qualifying.row.state] : "neutral"}
 							note={qualifying.cutoff ? `cut at P${qualifying.cutoff}` : "final part"}
 						>
-							{qualifying.row?.margin != null ? formatSigned(qualifying.row.margin) : (qualifying.row?.state ?? "-")}
+							{qualifying.row?.margin != null
+								? formatSigned(qualifying.row.margin)
+								: qualifying.row?.seconds == null
+									? "no time"
+									: qualifying.row.state === "eliminated"
+										? "out"
+										: "-"}
 						</Tile>
 						<Tile
 							label="Push lap heading for"
@@ -214,6 +228,23 @@ export default function CarPanel({ car, mode, meta, stats, flags, tla, pitLoss, 
 					</span>
 				</Tile>
 			</div>
+
+			{mode === "qualifying" && <MiniSectors sectors={driver.Sectors} push={qualifying.push} />}
+
+			{mode === "qualifying" && driver.InPit && !out && qualifying.lastCall !== null && (
+				<p
+					className={clsx("rounded px-2 py-1 text-sm font-semibold", {
+						"bg-zinc-800 text-zinc-200": qualifying.lastCall > LAST_CALL_WARNING_MS,
+						"animate-pulse bg-amber-500/20 text-amber-300":
+							qualifying.lastCall > 0 && qualifying.lastCall <= LAST_CALL_WARNING_MS,
+						"bg-red-500/20 text-red-300": qualifying.lastCall <= 0,
+					})}
+				>
+					{qualifying.lastCall > 0
+						? `In the pits, leave within ${formatClock(qualifying.lastCall)} for another lap`
+						: "In the pits, too late for another lap"}
+				</p>
+			)}
 
 			<StintStrip stints={car.stints} degradation={car.degradation} />
 

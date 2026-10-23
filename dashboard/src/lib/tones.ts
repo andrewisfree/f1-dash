@@ -122,3 +122,12 @@ export const COMPOUND_CHIP: Record<string, string> = {
 	INTERMEDIATE: "bg-green-500/30 text-green-100",
 	WET: "bg-sky-500/30 text-sky-100",
 };
+
+// colours of the mini sectors as the feed sends them, blue for the pit lane
+export function segmentFill(status: number): string {
+	if (status === 2051) return TONE_FILL.best;
+	if (status === 2049) return TONE_FILL.gain;
+	if (status === 2048 || status === 2052) return "bg-yellow-400";
+	if (status === 2064) return "bg-sky-500";
+	return "bg-zinc-800";
+}
