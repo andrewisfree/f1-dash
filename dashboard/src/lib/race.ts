@@ -7,9 +7,8 @@ import { getGapTrend, type LapSample } from "@/stores/useLapHistoryStore";
 // slower gap changes than this are shown as stable
 const MIN_TREND_RATE = 0.05;
 const MAX_CATCH_LAPS = 30;
-// laps averaged for the race pace, and the fewest clean laps a stint needs for a trend
+// laps averaged for the race pace
 export const PACE_LAPS = 3;
-const MIN_STINT_LAPS = 4;
 
 // safety car, red flag and virtual safety car
 export const isNeutralized = (status?: string) => ["4", "5", "6", "7"].includes(status ?? "");
@@ -67,30 +66,6 @@ export function getPace(samples: LapSample[] | undefined, laps = PACE_LAPS): num
 
 	if (times.length < laps) return null;
 	return times.reduce((sum, time) => sum + time, 0) / laps;
-}
-
-/**
- * least squares slope of the clean lap times in one stint, seconds per lap, positive when the laps get slower
- * fuel burn makes the laps faster, so the tyres show as the change on top of it
- */
-export function getStintTrend(samples: LapSample[] | undefined, stint: number): number | null {
-	const laps = (samples ?? []).filter(
-		(sample): sample is LapSample & { lapTime: number } =>
-			sample.stint === stint && sample.clean && sample.lapTime !== null,
-	);
-	if (laps.length < MIN_STINT_LAPS) return null;
-
-	const meanLap = laps.reduce((sum, sample) => sum + sample.lap, 0) / laps.length;
-	const meanTime = laps.reduce((sum, sample) => sum + sample.lapTime, 0) / laps.length;
-
-	let covariance = 0;
-	let variance = 0;
-	for (const sample of laps) {
-		covariance += (sample.lap - meanLap) * (sample.lapTime - meanTime);
-		variance += (sample.lap - meanLap) ** 2;
-	}
-
-	return variance > 0 ? covariance / variance : null;
 }
 
 export type StatusRival = {

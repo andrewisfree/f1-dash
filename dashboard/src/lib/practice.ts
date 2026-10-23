@@ -39,13 +39,13 @@ export type LongRun = {
 	degradation: number | null;
 };
 
-const median = (values: number[]) => {
+export const median = (values: number[]) => {
 	const sorted = [...values].sort((a, b) => a - b);
 	const middle = Math.floor(sorted.length / 2);
 	return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
 };
 
-function linearSlope(points: { x: number; y: number }[]): number | null {
+export function linearSlope(points: { x: number; y: number }[]): number | null {
 	if (points.length < 3) return null;
 
 	const meanX = points.reduce((sum, point) => sum + point.x, 0) / points.length;

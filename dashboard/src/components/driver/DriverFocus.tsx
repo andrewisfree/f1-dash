@@ -1,26 +1,38 @@
 "use client";
 
-import { useMemo, type ReactNode } from "react";
+import { useMemo } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import clsx from "clsx";
 
-import type { Sector, TimingDataDriver } from "@/types/state.type";
+import type { TimingDataDriver } from "@/types/state.type";
 
 import { computeGapsSeconds, getOrderedTimingDrivers, parseLapSeconds, parseLapsDown } from "@/lib/gaps";
+import { buildLapLog, getStintDegradation } from "@/lib/lapLog";
 import {
 	describeStatus,
 	describeTrend,
 	formatSigned,
 	getPace,
 	getPitWindow,
-	getStintTrend,
 	isNeutralized,
 	isOffLeadLap,
 	type Trend,
 } from "@/lib/race";
 import { getDriverFlags } from "@/lib/raceControl";
 import { tireIcon } from "@/lib/tires";
+import {
+	degradationTone,
+	deltaTone,
+	heatChip,
+	lapTone,
+	rivalTone,
+	sectorTone,
+	TONE_BORDER,
+	TONE_CHIP,
+	TONE_TEXT,
+	tyreWear,
+} from "@/lib/tones";
 
 import { useDataStore } from "@/stores/useDataStore";
 import { useLapHistoryStore, type LapSample } from "@/stores/useLapHistoryStore";
@@ -31,10 +43,10 @@ import { RaceControlMessage } from "@/components/dashboard/RaceControlMessage";
 import RadioMessage from "@/components/dashboard/RadioMessage";
 import Badge from "@/components/driver/Badge";
 import DriverCarMetrics from "@/components/driver/DriverCarMetrics";
-import DriverHistoryTires from "@/components/driver/DriverHistoryTires";
 import LapChart, { type LapChartPoint, type LapChartSeries } from "@/components/driver/LapChart";
 import TrendText from "@/components/driver/TrendText";
 import Footer from "@/components/Footer";
+import { Card, Delta, Fact, GapBar, StintStrip, Tile, TyreWearBar } from "@/components/panel/Panel";
 
 // chart colors follow the role, the selected driver and the cars compared with it
 // green and purple are left to improved and best laps
@@ -65,13 +77,6 @@ function formatLap(seconds: number) {
 	const minutes = Math.floor(seconds / 60);
 	const rest = (seconds - minutes * 60).toFixed(3).padStart(6, "0");
 	return minutes > 0 ? `${minutes}:${rest}` : rest;
-}
-
-function sectorClass(sector?: Sector) {
-	if (!sector?.Value) return "text-zinc-600";
-	if (sector.OverallFastest) return "text-violet-400";
-	if (sector.PersonalFastest) return "text-emerald-400";
-	return "text-amber-300";
 }
 
 function delta(own?: string, other?: string): number | null {
@@ -273,7 +278,11 @@ export default function DriverFocus({ nr: requested }: Props) {
 	const topSpeed = (stats?.BestSpeeds as Record<string, { Value: string; Position?: number }> | undefined)?.ST;
 	const samples = history[nr] ?? [];
 	const pace = getPace(samples);
-	const stintTrend = getStintTrend(samples, stints.length);
+	const logRows = buildLapLog(samples, appData, driver.NumberOfLaps);
+	const degradation = (stintNumber: number) => getStintDegradation(logRows, stintNumber);
+	const currentDegradation = degradation(stints.length);
+	const wear = tyreWear(stint);
+	const rank = stats?.PersonalBestLapTime?.Position;
 
 	const aheadRival = rivals.find((rival) => rival.role === "ahead");
 	const behindRival = rivals.find((rival) => rival.role === "behind");
@@ -288,8 +297,7 @@ export default function DriverFocus({ nr: requested }: Props) {
 	const paceVsAhead = pace !== null && aheadPace !== null ? pace - aheadPace : null;
 	const lapText = isRace && state.LapCount ? `Lap ${state.LapCount.CurrentLap}/${state.LapCount.TotalLaps}` : null;
 
-	const lapLog = samples.slice(-LAP_LOG_SIZE).reverse();
-	const lapTimes = new Map(charts.lapTime[0]?.points.map((point) => [point.lap, point]));
+	const lapLog = logRows.slice(-LAP_LOG_SIZE).reverse();
 	const gapColumns = charts.gap.map((series) => ({
 		series,
 		byLap: new Map(series.points.map((point) => [point.lap, point])),
@@ -388,7 +396,7 @@ export default function DriverFocus({ nr: requested }: Props) {
 
 				<div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-6">
 					{isRace && (
-						<Tile label="Grid">
+						<Tile label="Grid" tone={gained === null || gained === 0 ? "neutral" : gained > 0 ? "gain" : "loss"}>
 							{Number.isFinite(gridPosition) ? `P${gridPosition}` : "-"}
 							{gained !== null && gained !== 0 && (
 								<span className={clsx("ml-1.5 text-sm", gained > 0 ? "text-emerald-400" : "text-red-400")}>
@@ -402,19 +410,13 @@ export default function DriverFocus({ nr: requested }: Props) {
 						{out ? "OUT" : lapsDown > 0 ? `+${lapsDown}L` : position === 1 ? "-" : `+${gapToLeader.toFixed(3)}`}
 					</Tile>
 
-					<Tile label="Last lap" note={`Best ${driver.BestLapTime?.Value || "-"}`}>
-						<span
-							className={clsx({
-								"text-violet-400": driver.LastLapTime?.OverallFastest,
-								"text-emerald-400": driver.LastLapTime?.PersonalFastest && !driver.LastLapTime?.OverallFastest,
-							})}
-						>
-							{driver.LastLapTime?.Value || "-"}
-						</span>
+					<Tile label="Last lap" note={`Best ${driver.BestLapTime?.Value || "-"}`} tone={lapTone(driver.LastLapTime)}>
+						{driver.LastLapTime?.Value || "-"}
 					</Tile>
 
 					<Tile
 						label="Best lap rank"
+						tone={rank === 1 ? "best" : rank !== undefined && rank <= 3 ? "gain" : "neutral"}
 						note={
 							topSpeed?.Value ? `Top speed ${topSpeed.Value}${topSpeed.Position ? ` (P${topSpeed.Position})` : ""}` : ""
 						}
@@ -424,20 +426,20 @@ export default function DriverFocus({ nr: requested }: Props) {
 
 					<Tile
 						label="Tyre"
+						tone={wear?.tone}
 						note={
-							isRace ? (
-								<>
-									{`${Math.max(0, stints.length - 1)} stop${stints.length === 2 ? "" : "s"}`}
-									{stintTrend !== null && (
-										<span
-											className={clsx({ "text-red-400": stintTrend > 0 })}
-											title="Change of the lap time this stint, fuel burn included"
-										>
-											{` · ${formatSigned(stintTrend, 2)}s/lap`}
-										</span>
-									)}
-								</>
-							) : undefined
+							<>
+								<TyreWearBar stint={stint} />
+								{isRace && `${Math.max(0, stints.length - 1)} stop${stints.length === 2 ? "" : "s"}`}
+								{currentDegradation !== null && (
+									<span
+										className={TONE_TEXT[degradationTone(currentDegradation)]}
+										title="Tyre loss per lap on this set, fuel burn added back"
+									>
+										{`${isRace ? " · " : ""}deg ${formatSigned(currentDegradation, 2)}s/lap`}
+									</span>
+								)}
+							</>
 						}
 					>
 						<span className="flex items-center gap-1.5">
@@ -447,9 +449,12 @@ export default function DriverFocus({ nr: requested }: Props) {
 					</Tile>
 
 					<Tile label="Sectors">
-						<span className="flex gap-2 text-sm">
+						<span className="flex flex-wrap gap-1 text-sm">
 							{driver.Sectors.slice(0, 3).map((sector, sectorIndex) => (
-								<span key={`sector.${sectorIndex}`} className={clsx("tabular-nums", sectorClass(sector))}>
+								<span
+									key={`sector.${sectorIndex}`}
+									className={clsx("rounded px-1 tabular-nums", TONE_CHIP[sectorTone(sector)])}
+								>
 									{sector.Value || "-"}
 								</span>
 							))}
@@ -459,7 +464,7 @@ export default function DriverFocus({ nr: requested }: Props) {
 
 				{stints.length > 0 && (
 					<div className="mt-3">
-						<DriverHistoryTires stints={stints} />
+						<StintStrip stints={stints} degradation={degradation} />
 					</div>
 				)}
 			</div>
@@ -491,10 +496,12 @@ export default function DriverFocus({ nr: requested }: Props) {
 					const tyreAge = (otherStint?.TotalLaps ?? 0) - (stint?.TotalLaps ?? 0);
 					const paceDelta = pace !== null && rival.pace !== null ? pace - rival.pace : null;
 					const bestLap = delta(driver.BestLapTime?.Value, other.BestLapTime?.Value);
+					const tone = rivalTone(rival.trend, rival.role);
 
 					return (
 						<Card
 							key={`rival.${rival.role}`}
+							className={clsx("border-l-4", TONE_BORDER[tone])}
 							title={`${rival.pinned ? "Pinned rival, " : "Car "}${rival.role}`}
 							action={
 								<button
@@ -523,6 +530,12 @@ export default function DriverFocus({ nr: requested }: Props) {
 									{rival.trend && <TrendText trend={rival.trend} className="text-xs" />}
 								</div>
 							</div>
+
+							{rival.interval !== null && (
+								<div className="mt-2">
+									<GapBar gap={rival.interval} tone={tone} />
+								</div>
+							)}
 
 							<div className="mt-2 grid grid-cols-1 gap-x-4 gap-y-1 text-sm sm:grid-cols-2">
 								<Fact label="Tyre">
@@ -632,6 +645,9 @@ export default function DriverFocus({ nr: requested }: Props) {
 									<th className="text-left font-normal">Lap</th>
 									<th className="font-normal">Pos</th>
 									<th className="font-normal">Time</th>
+									<th className="font-normal" title="against the typical lap on the same set">
+										vs set
+									</th>
 									{gapColumns.map(({ series }) => (
 										<th key={`gap.head.${series.key}`} className="font-normal">
 											{series.label}
@@ -640,19 +656,37 @@ export default function DriverFocus({ nr: requested }: Props) {
 								</tr>
 							</thead>
 							<tbody>
-								{lapLog.map((sample) => (
-									<tr key={`lap.${sample.lap}`} className={clsx({ "text-zinc-500": !sample.clean })}>
-										<td className="text-left">{sample.lap}</td>
-										<td>P{sample.position}</td>
-										<td className={toneClass(lapTimes.get(sample.lap)?.tone)}>
-											{sample.lapTime !== null ? formatLap(sample.lapTime) : "-"}
+								{lapLog.map((row) => (
+									<tr key={`lap.${row.lap}`} className={clsx({ "text-zinc-500": row.reason !== null })}>
+										<td className="py-0.5 text-left">{row.lap}</td>
+										<td>P{row.position}</td>
+										<td>
+											<span
+												className={clsx(
+													"inline-block min-w-[4.5rem] rounded px-1 text-center",
+													row.reason !== null
+														? TONE_CHIP.excluded
+														: row.personalBest
+															? TONE_CHIP.gain
+															: heatChip(row.delta),
+												)}
+											>
+												{row.lapTime !== null ? formatLap(row.lapTime) : "-"}
+											</span>
+										</td>
+										<td className={row.reason !== null ? "text-xs" : TONE_TEXT[deltaTone(row.delta, 0.1)]}>
+											{row.reason ?? (row.delta !== null ? formatSigned(row.delta, 2) : "-")}
 										</td>
 										{gapColumns.map(({ series, byLap }) => {
-											const point = byLap.get(sample.lap);
+											const point = byLap.get(row.lap);
+											const previous = byLap.get(row.lap - 1);
+											const change = point && previous ? point.value - previous.value : null;
+											const tone = deltaTone(change, 0.05);
 
 											return (
-												<td key={`gap.${series.key}`} className={toneClass(point?.tone)}>
+												<td key={`gap.${series.key}`} className={TONE_TEXT[tone]}>
 													{point ? formatSigned(point.value) : "-"}
+													{change !== null && tone !== "neutral" && (change < 0 ? " \u25BC" : " \u25B2")}
 												</td>
 											);
 										})}
@@ -696,57 +730,5 @@ export default function DriverFocus({ nr: requested }: Props) {
 
 			<Footer />
 		</div>
-	);
-}
-
-type CardProps = {
-	title: string;
-	action?: ReactNode;
-	className?: string;
-	children: ReactNode;
-};
-
-function Card({ title, action, className, children }: CardProps) {
-	return (
-		<div className={clsx("rounded-lg border border-zinc-800 p-3", className)}>
-			<div className="mb-2 flex items-center justify-between gap-2">
-				<p className="text-xs text-zinc-500">{title}</p>
-				{action}
-			</div>
-			{children}
-		</div>
-	);
-}
-
-// purple for the best, green for an improvement
-function toneClass(tone: LapChartPoint["tone"]) {
-	return clsx({ "text-violet-400": tone === "best", "text-emerald-400": tone === "improved" });
-}
-
-function Tile({ label, note, children }: { label: string; note?: ReactNode; children: ReactNode }) {
-	return (
-		<div className="rounded-md bg-zinc-900/60 px-2.5 py-2">
-			<p className="text-xs text-zinc-500">{label}</p>
-			<div className="text-lg leading-tight font-semibold tabular-nums">{children}</div>
-			{note && <p className="text-xs text-zinc-500 tabular-nums">{note}</p>}
-		</div>
-	);
-}
-
-function Fact({ label, children }: { label: string; children: ReactNode }) {
-	return (
-		<div className="flex items-center justify-between gap-2">
-			<span className="text-zinc-500">{label}</span>
-			<span className="tabular-nums">{children}</span>
-		</div>
-	);
-}
-
-// negative means the selected driver is faster
-function Delta({ value }: { value: number | null }) {
-	if (value === null) return <span className="text-zinc-600">-</span>;
-
-	return (
-		<span className={clsx({ "text-emerald-400": value < 0, "text-red-400": value > 0 })}>{formatSigned(value)}</span>
 	);
 }

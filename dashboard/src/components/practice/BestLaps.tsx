@@ -7,6 +7,7 @@ import type { State } from "@/types/state.type";
 
 import { formatLapTime, getBestLaps, getDeletedTimes, type LongRun, type PracticeLap } from "@/lib/practice";
 import { formatSigned } from "@/lib/race";
+import { degradationTone, heatChip, TONE_TEXT } from "@/lib/tones";
 
 import Badge from "@/components/driver/Badge";
 import CompoundFilter, { type Compound } from "@/components/practice/CompoundFilter";
@@ -20,9 +21,6 @@ type Props = {
 };
 
 type Sort = "lap" | "pace";
-
-// a tenth per lap of tyre loss is a lot
-const HIGH_DEGRADATION = 0.1;
 
 /**
  * best lap and race pace of every driver, with the tyres they were set on and what was left in the sectors
@@ -158,7 +156,13 @@ export default function BestLaps({ state, laps, runs, compounds }: Props) {
 									>
 										{formatLapTime(row.best)}
 									</td>
-									<td className="px-1 py-1 text-right text-zinc-400">{row.gap ? `+${row.gap.toFixed(3)}` : ""}</td>
+									<td className="px-1 py-1 text-right">
+										{row.gap ? (
+											<span className={clsx("rounded px-1", heatChip(row.gap))}>+{row.gap.toFixed(3)}</span>
+										) : (
+											""
+										)}
+									</td>
 									<td className="px-1 py-1">
 										<TyreTag stint={row.stint} age={row.lap?.tyreAge} />
 									</td>
@@ -176,13 +180,17 @@ export default function BestLaps({ state, laps, runs, compounds }: Props) {
 										)}
 									</td>
 									<td className="bg-zinc-900/60 px-1 py-1 text-right text-zinc-400">
-										{paceGap ? `+${paceGap.toFixed(3)}` : ""}
+										{paceGap ? (
+											<span className={clsx("rounded px-1", heatChip(paceGap))}>+{paceGap.toFixed(3)}</span>
+										) : (
+											""
+										)}
 									</td>
 									<td
-										className={clsx("border-r border-zinc-800 bg-zinc-900/60 px-1 py-1 text-right", {
-											"text-red-400": run?.degradation != null && run.degradation >= HIGH_DEGRADATION,
-											"text-zinc-300": run?.degradation != null && run.degradation < HIGH_DEGRADATION,
-										})}
+										className={clsx(
+											"border-r border-zinc-800 bg-zinc-900/60 px-1 py-1 text-right",
+											TONE_TEXT[degradationTone(run?.degradation ?? null)],
+										)}
 									>
 										{run?.degradation != null ? formatSigned(run.degradation, 2) : ""}
 									</td>

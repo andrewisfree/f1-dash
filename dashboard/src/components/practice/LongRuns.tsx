@@ -8,6 +8,7 @@ import type { State } from "@/types/state.type";
 
 import { FUEL_EFFECT, formatLapTime, LONG_RUN_LAPS, type LongRun } from "@/lib/practice";
 import { formatSigned } from "@/lib/race";
+import { degradationTone, heatChip, TONE_TEXT } from "@/lib/tones";
 import { tireIcon } from "@/lib/tires";
 
 import LapChart, { type LapChartSeries } from "@/components/driver/LapChart";
@@ -22,8 +23,6 @@ type Props = {
 
 // runs drawn in the chart until the user picks
 const DEFAULT_SELECTED = 4;
-// a tenth per lap of tyre loss is a lot
-const HIGH_DEGRADATION = 0.1;
 
 const runKey = (run: LongRun) => `${run.nr}.${run.stint}.${run.laps[0].lap}`;
 
@@ -183,17 +182,23 @@ export default function LongRuns({ state, runs, compounds }: Props) {
 											</td>
 											<td className="px-1 py-1 text-right font-semibold">{formatLapTime(run.average)}</td>
 											<td className="px-1 py-1 text-right text-zinc-400">
-												{fastest !== null && run.average > fastest ? `+${(run.average - fastest).toFixed(3)}` : ""}
+												{fastest !== null && run.average > fastest ? (
+													<span className={clsx("rounded px-1", heatChip(run.average - fastest))}>
+														+{(run.average - fastest).toFixed(3)}
+													</span>
+												) : (
+													""
+												)}
 											</td>
 											<td className="px-1 py-1 text-right text-zinc-400">{formatLapTime(run.best)}</td>
 											<td className="px-1 py-1 text-right text-zinc-500">
 												{run.slope !== null ? formatSigned(run.slope) : ""}
 											</td>
 											<td
-												className={clsx("px-1 py-1 text-right font-semibold", {
-													"text-red-400": run.degradation !== null && run.degradation >= HIGH_DEGRADATION,
-													"text-zinc-200": run.degradation !== null && run.degradation < HIGH_DEGRADATION,
-												})}
+												className={clsx(
+													"px-1 py-1 text-right font-semibold",
+													TONE_TEXT[degradationTone(run.degradation)],
+												)}
 											>
 												{run.degradation !== null ? formatSigned(run.degradation) : ""}
 											</td>
