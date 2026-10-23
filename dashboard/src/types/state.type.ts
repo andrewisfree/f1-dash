@@ -225,8 +225,8 @@ export type Sector = {
 export type Speeds = {
 	I1: I1;
 	I2: I1;
-	Fl: I1;
-	St: I1;
+	FL: I1;
+	ST: I1;
 };
 
 export type I1 = {
@@ -244,8 +244,8 @@ export type TimingStatsDriver = {
 	BestSpeeds: {
 		I1: PersonalBestLapTime;
 		I2: PersonalBestLapTime;
-		Fl: PersonalBestLapTime;
-		St: PersonalBestLapTime;
+		FL: PersonalBestLapTime;
+		ST: PersonalBestLapTime;
 	};
 };
 

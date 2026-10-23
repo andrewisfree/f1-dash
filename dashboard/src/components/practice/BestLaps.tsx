@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import clsx from "clsx";
 
 import type { State } from "@/types/state.type";
 
-import { formatLapTime, getBestLaps, type PracticeLap } from "@/lib/practice";
+import { formatLapTime, getBestLaps, type LongRun, type PracticeLap } from "@/lib/practice";
 import { formatSigned } from "@/lib/race";
 
 import Badge from "@/components/driver/Badge";
@@ -15,18 +15,45 @@ import TyreTag from "@/components/practice/TyreTag";
 type Props = {
 	state: State;
 	laps: Record<string, PracticeLap[]>;
+	runs: LongRun[];
 	compounds: Compound[];
 };
 
+type Sort = "lap" | "pace";
+
+// a tenth per lap of tyre loss is a lot
+const HIGH_DEGRADATION = 0.1;
+
 /**
- * best lap of every driver with the tyre it was set on and what was left in the sectors
+ * best lap and race pace of every driver, with the tyres they were set on and what was left in the sectors
  */
-export default function BestLaps({ state, laps, compounds }: Props) {
+export default function BestLaps({ state, laps, runs, compounds }: Props) {
 	const [compound, setCompound] = useState<Compound | null>(null);
+	const [sort, setSort] = useState<Sort>("lap");
 
 	const lines = state.TimingData?.Lines ?? {};
 	const appData = state.TimingAppData?.Lines;
+
+	// the race pace of a driver is the average of the fastest long run
+	const pace = useMemo(() => {
+		const best = new Map<string, LongRun>();
+		for (const run of runs) {
+			if (compound && run.compound !== compound) continue;
+			const current = best.get(run.nr);
+			if (!current || run.average < current.average) best.set(run.nr, run);
+		}
+		return best;
+	}, [compound, runs]);
+
+	const fastestPace = Math.min(...Array.from(pace.values()).map((run) => run.average));
 	const rows = getBestLaps(lines, state.TimingStats?.Lines, laps, appData, compound);
+	if (sort === "pace") {
+		rows.sort(
+			(a, b) =>
+				(pace.get(a.driver.RacingNumber)?.average ?? Infinity) -
+					(pace.get(b.driver.RacingNumber)?.average ?? Infinity) || (a.best ?? Infinity) - (b.best ?? Infinity),
+		);
+	}
 
 	return (
 		<div className="rounded-lg border border-zinc-800 p-2">
@@ -39,11 +66,29 @@ export default function BestLaps({ state, laps, compounds }: Props) {
 							: "ideal lap is the sum of the best sectors"}
 					</span>
 				</p>
-				<CompoundFilter compounds={compounds} value={compound} onChange={setCompound} />
+				<div className="flex items-center gap-3">
+					<div className="flex items-center gap-1 text-xs">
+						<span className="text-zinc-600">Sort</span>
+						{(["lap", "pace"] as const).map((option) => (
+							<button
+								key={`sort.${option}`}
+								type="button"
+								onClick={() => setSort(option)}
+								className={clsx(
+									"rounded px-2 py-0.5",
+									sort === option ? "bg-zinc-700 text-zinc-100" : "text-zinc-500 hover:text-zinc-300",
+								)}
+							>
+								{option === "lap" ? "Best lap" : "Race pace"}
+							</button>
+						))}
+					</div>
+					<CompoundFilter compounds={compounds} value={compound} onChange={setCompound} />
+				</div>
 			</div>
 
 			<div className="overflow-x-auto">
-				<table className="w-full min-w-[640px] text-sm tabular-nums">
+				<table className="w-full min-w-[820px] text-sm tabular-nums">
 					<thead>
 						<tr className="text-left text-[10px] tracking-wide text-zinc-500 uppercase">
 							<th className="px-1 py-1 font-normal">Pos</th>
@@ -51,6 +96,19 @@ export default function BestLaps({ state, laps, compounds }: Props) {
 							<th className="px-1 py-1 text-right font-normal">Best</th>
 							<th className="px-1 py-1 text-right font-normal">Gap</th>
 							<th className="px-1 py-1 font-normal">Tyre</th>
+							<th
+								className="border-l border-zinc-800 bg-zinc-900/60 px-1 py-1 text-right font-normal text-zinc-300"
+								title="average of the fastest long run"
+							>
+								Race pace
+							</th>
+							<th className="bg-zinc-900/60 px-1 py-1 text-right font-normal">Gap</th>
+							<th
+								className="border-r border-zinc-800 bg-zinc-900/60 px-1 py-1 text-right font-normal"
+								title="tyre loss per lap on that run, fuel burn added back"
+							>
+								Deg
+							</th>
 							<th className="px-1 py-1 text-right font-normal">Ideal</th>
 							<th className="px-1 py-1 text-right font-normal">Left</th>
 							<th className="px-1 py-1 text-right font-normal">S1</th>
@@ -69,10 +127,13 @@ export default function BestLaps({ state, laps, compounds }: Props) {
 							const current = stints[stints.length - 1];
 							// the ideal only counts with the session best, not with a compound filter
 							const left = !compound && row.best !== null && row.ideal !== null ? row.best - row.ideal : null;
+							const run = pace.get(nr);
+							const paceGap = run ? run.average - fastestPace : null;
+							const ranked = sort === "lap" ? row.best !== null : !!run;
 
 							return (
 								<tr key={`best.${nr}`} className="border-t border-zinc-900">
-									<td className="px-1 py-1 text-zinc-500">{row.best !== null ? index + 1 : "-"}</td>
+									<td className="px-1 py-1 text-zinc-500">{ranked ? index + 1 : "-"}</td>
 									<td className="px-1 py-1">
 										<span className="flex items-center gap-1.5">
 											<span
@@ -90,16 +151,38 @@ export default function BestLaps({ state, laps, compounds }: Props) {
 									</td>
 									<td
 										className={clsx("px-1 py-1 text-right font-semibold", {
-											"text-violet-400": index === 0 && row.best !== null,
+											"text-violet-400": row.gap === 0,
 										})}
 									>
 										{formatLapTime(row.best)}
 									</td>
-									<td className="px-1 py-1 text-right text-zinc-400">
-										{row.gap !== null && index > 0 ? `+${row.gap.toFixed(3)}` : ""}
-									</td>
+									<td className="px-1 py-1 text-right text-zinc-400">{row.gap ? `+${row.gap.toFixed(3)}` : ""}</td>
 									<td className="px-1 py-1">
 										<TyreTag stint={row.stint} age={row.lap?.tyreAge} />
+									</td>
+									<td className="border-l border-zinc-800 bg-zinc-900/60 px-1 py-1 text-right">
+										{run ? (
+											<span className="inline-flex items-center gap-1.5">
+												<TyreTag stint={appData?.[nr]?.Stints?.[run.stint - 1]} />
+												<span className={clsx("font-semibold", paceGap === 0 ? "text-violet-400" : "text-zinc-100")}>
+													{formatLapTime(run.average)}
+												</span>
+												<span className="text-[10px] text-zinc-500">{run.used}L</span>
+											</span>
+										) : (
+											<span className="text-zinc-700">-</span>
+										)}
+									</td>
+									<td className="bg-zinc-900/60 px-1 py-1 text-right text-zinc-400">
+										{paceGap ? `+${paceGap.toFixed(3)}` : ""}
+									</td>
+									<td
+										className={clsx("border-r border-zinc-800 bg-zinc-900/60 px-1 py-1 text-right", {
+											"text-red-400": run?.degradation != null && run.degradation >= HIGH_DEGRADATION,
+											"text-zinc-300": run?.degradation != null && run.degradation < HIGH_DEGRADATION,
+										})}
+									>
+										{run?.degradation != null ? formatSigned(run.degradation, 2) : ""}
 									</td>
 									<td className="px-1 py-1 text-right text-zinc-400">{compound ? "" : formatLapTime(row.ideal)}</td>
 									<td
@@ -108,7 +191,7 @@ export default function BestLaps({ state, laps, compounds }: Props) {
 											"text-zinc-500": left !== null && left < 0.2,
 										})}
 									>
-										{left !== null ? formatSigned(left) : ""}
+										{left !== null ? (Math.abs(left) < 0.0005 ? "0.000" : formatSigned(left)) : ""}
 									</td>
 									{[0, 1, 2].map((sectorIndex) => {
 										const sector = row.sectors[sectorIndex];

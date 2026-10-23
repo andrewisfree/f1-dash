@@ -239,8 +239,8 @@ export function getBestLaps(
 			sectors,
 			ideal,
 			speed: {
-				value: driverStats?.BestSpeeds?.St?.Value ? parseFloat(driverStats.BestSpeeds.St.Value) : null,
-				fastest: driverStats?.BestSpeeds?.St?.Position === 1,
+				value: driverStats?.BestSpeeds?.ST?.Value ? parseFloat(driverStats.BestSpeeds.ST.Value) : null,
+				fastest: driverStats?.BestSpeeds?.ST?.Position === 1,
 			},
 		};
 	});

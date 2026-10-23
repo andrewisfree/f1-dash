@@ -112,7 +112,7 @@ export default function PracticeBoard() {
 				</p>
 			</div>
 
-			<BestLaps state={state} laps={laps} compounds={compounds} />
+			<BestLaps state={state} laps={laps} runs={runs} compounds={compounds} />
 			<LongRuns state={state} runs={runs} compounds={compounds} />
 		</>
 	);
