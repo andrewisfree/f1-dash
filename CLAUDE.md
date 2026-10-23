@@ -45,9 +45,11 @@ quindi la stessa immagine web funziona su qualsiasi host.
 - Stack attuale in **`/opt/f1-dash-v4`**: `compose.yaml` (copia di quello del repo) + `compose.override.yaml`
   (copia di `compose.proxmox.yaml`). Lì basta `docker compose up -d`. I servizi hanno `restart: unless-stopped`,
   quindi ripartono da soli quando si accende il container.
-- In `/opt/f1-dash` c'è il vecchio stack upstream (frontend, live, api, timescaledb, importer, analytics):
-  è **fermato, non cancellato**. Non avviarlo insieme al nuovo (stesse porte 3000 e 4000).
-- Disco quasi pieno (8 GB, ~0,9 GB liberi): controllare `df -h /` prima di caricare immagini.
+- Il vecchio stack upstream (`/opt/f1-dash`, con timescaledb, importer, analytics) è stato **eliminato** il
+  2026-10-10. Copia della cartella e dei volumi del database sul PC:
+  `D:\PyProg\f1-dash-proxmox-old-stack-20261010.tar.gz`.
+- Disco: 8 GB, ~4,8 GB liberi dopo la pulizia. Ogni aggiornamento lascia un'immagine web senza nome (~210 MB):
+  si toglie con `docker image prune -f`.
 - Compilare sul container non è praticabile (CPU dual-core lenta, poca RAM): le immagini si costruiscono sul PC.
 
 ### Aggiornare Proxmox alla versione del PC
@@ -79,6 +81,10 @@ del PC). Per questo `.env.local` è in `dashboard/.dockerignore`.
 - `node recordings/record.js <file.tsv> <minuti>` registra `localhost:4000/api/realtime`, un evento per riga.
 - `node recordings/make-replay.js <file.tsv> <out.json> <da_secondi|-1> <durata_secondi>` estrae lo stato a un
   certo punto più gli eventi successivi, da riprodurre nel browser per provare le pagine senza una sessione live.
+
+Il server web registra da solo i giri della sessione (`dashboard/src/server/lapRecorder.ts`, avviato da
+`src/instrumentation.ts`) e li espone su `/api/laps`: la dashboard li unisce al suo storico, così long run e passo
+gara restano completi anche se la pagina viene aperta tardi. Su Proxmox registra solo se il 108 è acceso.
 
 Lo storico degli interventi è in [LOG.md](LOG.md): aggiungere una voce a ogni modifica di deploy o infrastruttura.
 

@@ -2,6 +2,85 @@
 
 Storico degli interventi su deploy e infrastruttura di f1-dash. Voce più recente in alto.
 
+## 2026-10-23 — Registratore dei giri sul server
+
+**Obiettivo**: non perdere i giri (e le long run) quando la pagina viene aperta tardi o il feed si interrompe.
+
+**Versione installata**: commit `e8a1fdb`, costruita da un `git worktree` pulito (modifiche non committate escluse).
+
+**Cosa cambia**
+- Il server Next.js (`src/instrumentation.ts` → `src/server/lapRecorder.ts`) segue il realtime per tutta la sessione
+  e salva un campione per pilota e per giro; li espone su `/api/laps`. La pagina li unisce al suo storico ogni 30 s.
+- Variabili: `REALTIME_URL` (default `NEXT_PUBLIC_LIVE_URL`), `LAP_RECORDER_FILE` (default
+  `.next/lap-recorder.json`), `LAP_RECORDER=off` per spegnerlo.
+- `compose.proxmox.yaml`: `REALTIME_URL=http://realtime:80`, file in `/data/laps.json` sul volume `laps`
+  (sopravvive alla ricreazione del container). `compose.override.yaml`: solo `REALTIME_URL`.
+
+**Verifiche**
+- Prova sul PC con la registrazione di Singapore riprodotta a 10x: giri e stint registrati uguali al feed; una
+  pagina aperta da zero ha ricevuto subito i giri già fatti e poi è rimasta allineata.
+- Proxmox: log `lap recorder: recording http://realtime:80/api/realtime into /data/laps.json`, `/api/laps`
+  risponde con la sessione corrente (FP1 Austin finita, nessun giro ancora). Container web 54 MB di RAM.
+
+**Da fare / aperto**
+- Prima prova vera: FP2 di Austin. Il 108 va lasciato acceso, è lui a registrare.
+
+## 2026-10-23 — Pagina Practice su Proxmox
+
+**Obiettivo**: allineare Proxmox alla versione del PC con la nuova pagina Practice (`/dashboard/practice`).
+
+**Versione installata**: commit `5d9dfdc` (PR andrewisfree/f1-dash#1), costruita da un `git worktree` pulito di
+`HEAD` perché la cartella di lavoro aveva modifiche non committate (`DriverFocus.tsx`, `useLapHistory.ts`,
+`race.ts`, `map.tsx`): queste **non** sono nell'immagine.
+
+**Passi**
+- Host prima dell'avvio: 111 MB liberi su 3363. LXC 108 acceso via API alle 20:17 circa.
+- Sul PC Docker Desktop si era chiuso: riavviato, poi `api` e `realtime` locali rimessi su.
+- Immagine web caricata con `docker save | ssh docker load`, `compose.yaml` e `compose.proxmox.yaml` copiati,
+  `docker compose up -d`, `docker image prune -f` (205 MB). Immagini `api` e `realtime` invariate.
+
+**Verifiche**
+- `/dashboard/practice` risponde 200, `NEXT_PUBLIC_LIVE_URL` = `http://192.168.188.161:4000`, realtime 200.
+- Il bundle servito contiene il codice nuovo (colonne "Race pace", chiave `ST` della velocità).
+- Non verificata a vista: il pannello browser di Claude non apre `.161`.
+
+**Stato finale**
+- LXC 108 **acceso** (weekend di Austin), 172 MB usati. Host: 137 MB liberi, swap usata 3,4 GB. VM Home Assistant
+  in esecuzione. Disco 108: 4,8 GB liberi.
+
+**Da fare / aperto**
+- Spegnere il 108 a fine weekend.
+
+## 2026-10-10 — Eliminato il vecchio stack su Proxmox
+
+**Obiettivo**: liberare il disco del container LXC 108 togliendo il vecchio stack upstream, fermo dal pomeriggio.
+
+**Prima di cancellare**
+- LXC 108 era spento: acceso via API alle 19:26 solo per la pulizia.
+- Copia sul PC di ciò che non era rigenerabile: `D:\PyProg\f1-dash-proxmox-old-stack-20261010.tar.gz` (44 MB).
+  Contiene `/opt/f1-dash` (checkout del fork a `04882a3` con modifiche locali mai committate, `.env`, cartella
+  `dashboard/` e `f1-dashboard-src.tar.gz` di maggio) e i due volumi di timescaledb. Verificata: 3141 file,
+  stesso numero che sul container.
+
+**Eliminato dal container**
+- Progetto compose `f1-dash`: 6 container, rete `f1-dash_default`, volume del database
+  (`docker compose -p f1-dash down -v --rmi all`).
+- Immagini `ghcr.io/slowlydev/f1-dash`, `-api`, `-live`, `-importer`, `-analytics` e `timescale/timescaledb`.
+- Un volume orfano del database, le immagini senza nome (comprese le due web precedenti), la build cache (1,15 GB).
+- La cartella `/opt/f1-dash`.
+
+**Verifiche**
+- Restano solo i 3 container di `f1-dash-v4` e le 3 immagini `f1-dash-*-local`, nessun volume.
+- `/dashboard`, `/dashboard/qualifying`, `/dashboard/vertical`, `/schedule` rispondono 200; realtime e API 200.
+- Disco: da 843 MB a **4,8 GB liberi** su 7,8 GB.
+
+**Stato finale**
+- Ore 19:32: LXC 108 **rispento**, com'era prima dell'intervento. Host: 665 MB liberi su 3363. VM Home Assistant
+  in esecuzione e raggiungibile.
+
+**Da fare / aperto**
+- Il backup sul PC si può cancellare quando non serve più.
+
 ## 2026-10-10 — Modalità qualifica su Proxmox
 
 **Obiettivo**: portare su Proxmox la pagina Qualifying completata (`/dashboard/qualifying`).
