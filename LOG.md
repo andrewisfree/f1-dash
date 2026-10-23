@@ -2,6 +2,20 @@
 
 Storico degli interventi su deploy e infrastruttura di f1-dash. Voce più recente in alto.
 
+## 2026-10-23 — Vertical con lampeggi, Muretto con minisettori su Proxmox
+
+**Versione installata**: commit `250e2d6` (lampeggi e colori sulla Vertical, ultimo momento utile e minisettori
+nel Muretto in qualifica), costruita da un `git worktree` pulito. Immagini `api` e `realtime` invariate.
+
+**Verifiche**
+- `/dashboard`, `/dashboard/vertical`, `/dashboard/pitwall`, `/dashboard/driver/16`, `/dashboard/practice`,
+  `/api/laps` rispondono 200; `NEXT_PUBLIC_LIVE_URL` = `http://192.168.188.161:4000`; il bundle servito contiene
+  l'animazione dei lampeggi e l'avviso dei box del Muretto.
+- Prova sul PC con la replica di Singapore trasformata in gara finta (`AS_RACE=1`, `TRACK=6`): lampeggi, battaglie,
+  colori e bordo della VSC funzionano. Una gara vera non è ancora stata vista.
+
+**Carico alle 22:24**: load 0,74; web 75 MB, realtime 15 MB, api 7 MB.
+
 ## 2026-10-23 — Muretto e colori condizionali su Proxmox
 
 **Versione installata**: commit `e3d54ef` (pagina Pit Wall, colori condizionali su pilota e Practice), costruita
