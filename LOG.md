@@ -2,6 +2,19 @@
 
 Storico degli interventi su deploy e infrastruttura di f1-dash. Voce più recente in alto.
 
+## 2026-10-23 — Muretto e colori condizionali su Proxmox
+
+**Versione installata**: commit `e3d54ef` (pagina Pit Wall, colori condizionali su pilota e Practice), costruita
+da un `git worktree` pulito. Immagini `api` e `realtime` invariate.
+
+**Verifiche**
+- `/dashboard`, `/dashboard/pitwall`, `/dashboard/practice`, `/dashboard/driver/16`, `/api/laps` rispondono 200;
+  `NEXT_PUBLIC_LIVE_URL` = `http://192.168.188.161:4000`; il bundle servito contiene il codice del Muretto.
+- Registratore ripartito; è ancora sulla sessione della FP1 e passerà da solo alla FP2 quando inizia.
+
+**Carico alle 22:00**: host CPU 7%, load 1,33, 162 MB liberi, swap 3,45 GB; web 73 MB, realtime 15 MB, api 7 MB.
+VM Home Assistant in esecuzione.
+
 ## 2026-10-23 — Proxmox allineato a `c21ae91`
 
 **Versione installata**: commit `c21ae91` (pagina pilota con stato gara e passo, storico giri col ritardo, mappa
