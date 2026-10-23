@@ -7,6 +7,9 @@ import { getGapTrend, type LapSample } from "@/stores/useLapHistoryStore";
 // slower gap changes than this are shown as stable
 const MIN_TREND_RATE = 0.05;
 const MAX_CATCH_LAPS = 30;
+// laps averaged for the race pace, and the fewest clean laps a stint needs for a trend
+export const PACE_LAPS = 3;
+const MIN_STINT_LAPS = 4;
 
 // safety car, red flag and virtual safety car
 export const isNeutralized = (status?: string) => ["4", "5", "6", "7"].includes(status ?? "");
@@ -22,6 +25,10 @@ export function formatSigned(seconds: number, digits = 3) {
 export type Trend = {
 	text: string;
 	tone: "closing" | "opening" | "stable";
+	// change of the gap in seconds per lap, negative when closing
+	rate: number;
+	// laps until the gap is closed, null when opening or out of reach
+	catchLaps: number | null;
 };
 
 export function describeTrend(
@@ -33,14 +40,97 @@ export function describeTrend(
 	const trend = getGapTrend(behind, ahead);
 	if (!trend) return null;
 
-	if (Math.abs(trend.rate) < MIN_TREND_RATE) return { text: "stable", tone: "stable" };
+	if (Math.abs(trend.rate) < MIN_TREND_RATE)
+		return { text: "stable", tone: "stable", rate: trend.rate, catchLaps: null };
 
 	const text = `${formatSigned(trend.rate, 2)}/L`;
-	if (trend.rate > 0) return { text, tone: "opening" };
+	if (trend.rate > 0) return { text, tone: "opening", rate: trend.rate, catchLaps: null };
 
 	const catchLaps = Math.ceil(interval / -trend.rate);
 	const reachable = catchLaps <= Math.min(MAX_CATCH_LAPS, lapsRemaining ?? MAX_CATCH_LAPS);
-	return { text: reachable ? `${text} · ${catchLaps}L` : text, tone: "closing" };
+	return {
+		text: reachable ? `${text} · ${catchLaps}L` : text,
+		tone: "closing",
+		rate: trend.rate,
+		catchLaps: reachable ? catchLaps : null,
+	};
+}
+
+/**
+ * average of the last clean laps, the pace without traffic, pit stops or safety car
+ */
+export function getPace(samples: LapSample[] | undefined, laps = PACE_LAPS): number | null {
+	const times = (samples ?? [])
+		.filter((sample) => sample.clean && sample.lapTime !== null)
+		.slice(-laps)
+		.map((sample) => sample.lapTime as number);
+
+	if (times.length < laps) return null;
+	return times.reduce((sum, time) => sum + time, 0) / laps;
+}
+
+/**
+ * least squares slope of the clean lap times in one stint, seconds per lap, positive when the laps get slower
+ * fuel burn makes the laps faster, so the tyres show as the change on top of it
+ */
+export function getStintTrend(samples: LapSample[] | undefined, stint: number): number | null {
+	const laps = (samples ?? []).filter(
+		(sample): sample is LapSample & { lapTime: number } =>
+			sample.stint === stint && sample.clean && sample.lapTime !== null,
+	);
+	if (laps.length < MIN_STINT_LAPS) return null;
+
+	const meanLap = laps.reduce((sum, sample) => sum + sample.lap, 0) / laps.length;
+	const meanTime = laps.reduce((sum, sample) => sum + sample.lapTime, 0) / laps.length;
+
+	let covariance = 0;
+	let variance = 0;
+	for (const sample of laps) {
+		covariance += (sample.lap - meanLap) * (sample.lapTime - meanTime);
+		variance += (sample.lap - meanLap) ** 2;
+	}
+
+	return variance > 0 ? covariance / variance : null;
+}
+
+export type StatusRival = {
+	tla: string;
+	trend: Trend | null;
+};
+
+export type Status = {
+	text: string;
+	tone: "attack" | "warning" | "neutral";
+};
+
+const perLap = (rate: number) => `${Math.abs(rate).toFixed(2)}s/lap`;
+
+/**
+ * one line on how the race is going, from the trends against the cars ahead and behind
+ */
+export function describeStatus(ahead: StatusRival | null, behind: StatusRival | null): Status | null {
+	const threat = behind?.trend?.tone === "closing" ? ` · ${behind.tla} closing at ${perLap(behind.trend.rate)}` : "";
+
+	if (ahead?.trend) {
+		const { tla, trend } = ahead;
+		if (trend.tone === "closing") {
+			return trend.catchLaps !== null
+				? { text: `Attacking ${tla}, catches in ${trend.catchLaps} laps${threat}`, tone: "attack" }
+				: { text: `Closing on ${tla}, not enough laps to catch${threat}`, tone: "neutral" };
+		}
+		if (trend.tone === "opening") return { text: `Losing ground to ${tla}${threat}`, tone: "warning" };
+		return { text: `Holding station behind ${tla}${threat}`, tone: "neutral" };
+	}
+
+	if (behind?.trend) {
+		const { tla, trend } = behind;
+		if (trend.tone === "closing")
+			return { text: `Under attack from ${tla}, closing at ${perLap(trend.rate)}`, tone: "warning" };
+		if (trend.tone === "opening") return { text: `Pulling away from ${tla}`, tone: "attack" };
+		return { text: `Holding station ahead of ${tla}`, tone: "neutral" };
+	}
+
+	return null;
 }
 
 export type GapEntry = {
