@@ -10,17 +10,21 @@ import {
 	createGapScale,
 	formatCompactLap,
 	getOrderedTimingDrivers,
+	parseLapSeconds,
 	parseLapsDown,
 	type GapScale,
 } from "@/lib/gaps";
 import { getTrackStatusMessage } from "@/lib/getTrackStatusMessage";
+import { median } from "@/lib/practice";
 import { getCutoffPosition, inDangerZone } from "@/lib/qualifying";
 import { describeTrend, formatSigned, getPitWindow, isNeutralized, isOffLeadLap, type Trend } from "@/lib/race";
 import { getDriverFlags, type DriverFlags } from "@/lib/raceControl";
 import { tireIcon } from "@/lib/tires";
+import { heatChip, TONE_CHIP, tyreWear } from "@/lib/tones";
 import { useDataStore } from "@/stores/useDataStore";
 import { useLapHistoryStore } from "@/stores/useLapHistoryStore";
 import { useSettingsStore } from "@/stores/useSettingsStore";
+import { useRaceEvents, type RaceEvent, type RaceEventKind } from "@/hooks/useRaceEvents";
 import Badge from "@/components/driver/Badge";
 import TrendText from "@/components/driver/TrendText";
 import type { Driver, Sector, Stint, TimingDataDriver } from "@/types/state.type";
@@ -29,6 +33,26 @@ const TRACK_HEIGHT = 1040;
 const MIN_LABEL_GAP = 34;
 const MIN_TICK_GAP = 16;
 const TICKS = [1, 2, 3, 5, 10, 15, 20, 30, 45, 60, 90];
+// within this the car behind can use DRS, a battle
+const BATTLE_SECONDS = 1;
+
+// the colour a row lights up in when something happens to the car
+const FLASH: Record<RaceEventKind, string> = {
+	gain: "rgb(16 185 129 / 0.45)",
+	loss: "rgb(239 68 68 / 0.45)",
+	fastest: "rgb(139 92 246 / 0.55)",
+	pit: "rgb(14 165 233 / 0.45)",
+	flag: "rgb(245 158 11 / 0.45)",
+	out: "rgb(161 161 170 / 0.45)",
+};
+
+// the frame blinks under safety car and virtual safety car, red with a red flag
+const ALERT: Record<string, string> = {
+	"4": "rgb(245 158 11)",
+	"5": "rgb(239 68 68)",
+	"6": "rgb(245 158 11)",
+	"7": "rgb(245 158 11)",
+};
 type DriverPoint = {
 	driver: TimingDataDriver;
 	gap: number;
@@ -46,6 +70,15 @@ function sectorClass(sector?: Sector) {
 	if (sector.OverallFastest) return "bg-violet-600";
 	if (sector.PersonalFastest) return "bg-emerald-500";
 	return "bg-amber-400";
+}
+
+// the gap to the car ahead coloured by how fast it changes, green when catching
+function gapChip(trend: Trend | null): string {
+	if (!trend || trend.tone === "stable") return "";
+	if (trend.rate <= -0.3) return "bg-emerald-500/40 text-emerald-100";
+	if (trend.rate < 0) return "bg-emerald-500/20 text-emerald-200";
+	if (trend.rate >= 0.3) return "bg-red-500/35 text-red-100";
+	return "bg-red-500/20 text-red-200";
 }
 
 function spreadLabels(points: Omit<DriverPoint, "labelY">[]): DriverPoint[] {
@@ -82,6 +115,7 @@ export default function VerticalOfDoom() {
 	const pitLoss = useSettingsStore((store) => store.verticalPitLoss);
 
 	const [selected, setSelected] = useState<string | null>(null);
+	const events = useRaceEvents();
 
 	const sessionPart = state?.TimingData?.SessionPart;
 	const noEntries = state?.TimingData?.NoEntries;
@@ -204,6 +238,17 @@ export default function VerticalOfDoom() {
 		return getPitWindow(entries, reference, pitLoss);
 	}, [isRace, pitLoss, points, reference]);
 
+	// the typical last lap of the cars running, to tell who is flying and who is struggling
+	const fieldLap = useMemo(() => {
+		if (!isRace || neutralized) return null;
+
+		const times = ordered
+			.filter((driver) => !driver.InPit && !driver.PitOut && !driver.Retired && !driver.Stopped)
+			.map((driver) => parseLapSeconds(driver.LastLapTime?.Value))
+			.filter((time): time is number => time !== null);
+		return times.length >= 5 ? median(times) : null;
+	}, [isRace, neutralized, ordered]);
+
 	const cutoff = useMemo(() => {
 		if (isRace || !sessionPart) return null;
 
@@ -229,15 +274,28 @@ export default function VerticalOfDoom() {
 	const referenceIndex = points.findIndex((point) => point.driver.RacingNumber === reference);
 	const referencePoint = points[referenceIndex];
 	const span = scale.hi - scale.lo;
+	const alert = ALERT[state.TrackStatus?.Status ?? ""];
 
-	const renderRow = (driver: TimingDataDriver, gapLabel: string, trend: Trend | null, extra?: RowExtra) => {
+	const renderRow = (
+		driver: TimingDataDriver,
+		gapLabel: string,
+		trend: Trend | null,
+		extra?: RowExtra & { battle?: Trend | "close" | null },
+	) => {
 		const nr = driver.RacingNumber;
 		const appData = state.TimingAppData?.Lines[nr];
 		const position = parseInt(driver.Position);
+		const grid = appData?.GridPos ? parseInt(appData.GridPos) : NaN;
+		const lastLap = parseLapSeconds(driver.LastLapTime?.Value);
+		const event = events.get(nr);
 
 		return (
 			<DriverRow
-				key={`row.${nr}`}
+				key={`row.${nr}.${event?.id ?? 0}`}
+				event={event}
+				battle={extra?.battle ?? null}
+				gained={isRace && Number.isFinite(grid) && Number.isFinite(position) ? grid - position : null}
+				lapDelta={fieldLap !== null && lastLap !== null && !driver.InPit && !driver.PitOut ? lastLap - fieldLap : null}
 				driver={driver}
 				meta={drivers[nr]}
 				stint={appData?.Stints?.[appData.Stints.length - 1]}
@@ -258,11 +316,11 @@ export default function VerticalOfDoom() {
 
 	return (
 		<div
-			className={clsx("flex h-full min-h-[42rem] flex-col overflow-hidden rounded-lg border bg-zinc-950", {
-				"border-zinc-800": !neutralized,
-				"border-amber-500/70": neutralized && state.TrackStatus?.Status !== "5",
-				"border-red-500/70": state.TrackStatus?.Status === "5",
+			className={clsx("flex h-full min-h-[42rem] flex-col overflow-hidden rounded-lg bg-zinc-950", {
+				"border border-zinc-800": !alert,
+				"animate-border-alert border-2": alert,
 			})}
+			style={alert ? ({ "--alert": alert } as CSSProperties) : undefined}
 		>
 			<div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-800 px-3 py-2">
 				<div>
@@ -439,8 +497,10 @@ export default function VerticalOfDoom() {
 							);
 						})}
 
-					{points.map((point) => {
+					{points.map((point, index) => {
 						const driver = point.driver;
+						const ahead = points[index - 1];
+						const close = isRace && !neutralized && ahead && point.gap - ahead.gap < BATTLE_SECONDS;
 						const nr = driver.RacingNumber;
 						const teamColour = `#${drivers[nr]?.TeamColour ?? "71717a"}`;
 						const penalty = isRace ? (flags.get(nr)?.penalty ?? 0) : 0;
@@ -482,6 +542,7 @@ export default function VerticalOfDoom() {
 									className: "absolute right-0 left-20 sm:left-24",
 									style: { top: point.labelY - 16 },
 									onSelect: () => setSelected(nr === reference ? null : nr),
+									battle: close ? (trend?.interval ?? "close") : null,
 								})}
 							</div>
 						);
@@ -510,6 +571,13 @@ type RowExtra = {
 };
 
 type DriverRowProps = RowExtra & {
+	event: RaceEvent | undefined;
+	// the fight with the car ahead within a second, with its trend when known
+	battle: Trend | "close" | null;
+	// places won since the start, null outside the race
+	gained: number | null;
+	// last lap against the typical last lap of the field, negative when faster
+	lapDelta: number | null;
 	driver: TimingDataDriver;
 	meta: Driver | undefined;
 	stint: Stint | undefined;
@@ -524,6 +592,10 @@ type DriverRowProps = RowExtra & {
 };
 
 function DriverRow({
+	event,
+	battle,
+	gained,
+	lapDelta,
 	driver,
 	meta,
 	stint,
@@ -540,11 +612,13 @@ function DriverRow({
 	onSelect,
 }: DriverRowProps) {
 	const inPit = driver.InPit || driver.PitOut;
+	const wear = tyreWear(stint);
+	const battleTone = battle === null ? null : battle === "close" || battle.tone === "stable" ? "even" : battle.tone;
 
 	return (
 		<div
 			onClick={onSelect}
-			style={style}
+			style={event ? ({ ...style, "--flash": FLASH[event.kind] } as CSSProperties) : style}
 			className={clsx(
 				"grid min-h-8 grid-cols-[4.25rem_4.25rem_minmax(0,1fr)_auto] items-center gap-1.5 rounded-md border px-2 py-0.5 text-sm shadow-lg shadow-black/20 select-none sm:grid-cols-[5rem_4.5rem_minmax(0,1fr)_auto_2.75rem] sm:gap-2",
 				className,
@@ -555,6 +629,11 @@ function DriverRow({
 					"border-red-800 bg-red-950/70": danger && !selected,
 					"border-zinc-200 bg-zinc-800": selected,
 					"opacity-45": driver.KnockedOut || driver.Retired || driver.Stopped,
+					"animate-row-flash": event,
+					"border-l-4": battleTone,
+					"border-l-emerald-500": battleTone === "closing",
+					"border-l-red-500": battleTone === "opening",
+					"border-l-amber-400": battleTone === "even",
 				},
 			)}
 		>
@@ -566,6 +645,17 @@ function DriverRow({
 						style={{ backgroundColor: `#${meta?.TeamColour ?? "71717a"}` }}
 					/>
 					<span className="font-mono text-base leading-5 font-black">{meta?.Tla ?? driver.RacingNumber}</span>
+					{gained !== null && gained !== 0 && (
+						<span
+							className={clsx(
+								"hidden text-[10px] font-semibold tabular-nums sm:inline",
+								gained > 0 ? "text-emerald-400" : "text-red-400",
+							)}
+							title="places since the start"
+						>
+							{gained > 0 ? `\u25B2${gained}` : `\u25BC${-gained}`}
+						</span>
+					)}
 				</div>
 
 				{/* narrow screens have no room for the sectors next to the badges */}
@@ -580,7 +670,10 @@ function DriverRow({
 			</div>
 
 			<div className="text-right leading-tight tabular-nums">
-				<div className="text-xs text-zinc-400">{gapLabel}</div>
+				<div className={clsx("inline-block rounded px-1 text-xs", gapChip(trend) || "text-zinc-400")}>
+					{gapLabel}
+					{battleTone && <span className="ml-1 text-[10px] font-black">DRS</span>}
+				</div>
 				{trend && trend.tone !== "stable" && <TrendText trend={trend} className="block text-[10px]" />}
 			</div>
 
@@ -616,15 +709,27 @@ function DriverRow({
 
 			<div className="flex items-center justify-end gap-1">
 				<Image src={tireIcon(stint?.Compound)} alt={stint?.Compound ?? "unknown tire"} width={18} height={18} />
-				<span className="text-xs text-zinc-500 tabular-nums">{stint?.TotalLaps ?? 0}L</span>
+				<span
+					className={clsx("rounded px-1 text-xs tabular-nums", wear ? TONE_CHIP[wear.tone] : "text-zinc-500")}
+					title="laps on the set, from fresh to worn"
+				>
+					{stint?.TotalLaps ?? 0}L
+				</span>
 			</div>
 
 			<div
-				className={clsx("hidden text-right text-xs font-medium tabular-nums sm:block", {
-					"text-violet-400": driver.LastLapTime.OverallFastest,
-					"text-emerald-400": driver.LastLapTime.PersonalFastest,
-					"text-zinc-500": !driver.LastLapTime.Value,
-				})}
+				className={clsx(
+					"hidden rounded px-1 text-right text-xs font-medium tabular-nums sm:block",
+					driver.LastLapTime.OverallFastest
+						? TONE_CHIP.best
+						: lapDelta !== null
+							? heatChip(lapDelta)
+							: {
+									"text-emerald-400": driver.LastLapTime.PersonalFastest,
+									"text-zinc-500": !driver.LastLapTime.Value,
+								},
+				)}
+				title={lapDelta !== null ? `${formatSigned(lapDelta, 2)} on the typical lap of the field` : undefined}
 			>
 				{formatCompactLap(driver.LastLapTime.Value)}
 			</div>
