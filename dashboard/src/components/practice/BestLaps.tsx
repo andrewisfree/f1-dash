@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import clsx from "clsx";
 
 import type { State } from "@/types/state.type";
@@ -11,6 +11,7 @@ import { degradationTone, heatChip, TONE_TEXT } from "@/lib/tones";
 
 import Badge from "@/components/driver/Badge";
 import CompoundFilter, { type Compound } from "@/components/practice/CompoundFilter";
+import StintLaps from "@/components/practice/StintLaps";
 import TyreTag from "@/components/practice/TyreTag";
 
 type Props = {
@@ -28,6 +29,15 @@ type Sort = "lap" | "pace";
 export default function BestLaps({ state, laps, runs, compounds }: Props) {
 	const [compound, setCompound] = useState<Compound | null>(null);
 	const [sort, setSort] = useState<Sort>("lap");
+	// drivers whose laps are open under their row
+	const [open, setOpen] = useState<Set<string>>(() => new Set());
+	const toggle = (nr: string) =>
+		setOpen((current) => {
+			const next = new Set(current);
+			if (next.has(nr)) next.delete(nr);
+			else next.add(nr);
+			return next;
+		});
 
 	const lines = state.TimingData?.Lines ?? {};
 	const appData = state.TimingAppData?.Lines;
@@ -132,98 +142,121 @@ export default function BestLaps({ state, laps, runs, compounds }: Props) {
 							const ranked = sort === "lap" ? row.best !== null : !!run;
 
 							return (
-								<tr key={`best.${nr}`} className="border-t border-zinc-900">
-									<td className="px-1 py-1 text-zinc-500">{ranked ? index + 1 : "-"}</td>
-									<td className="px-1 py-1">
-										<span className="flex items-center gap-1.5">
-											<span
-												className="h-4 w-1 shrink-0 rounded-full"
-												style={{ backgroundColor: `#${meta?.TeamColour ?? "71717a"}` }}
-											/>
-											<span className="font-mono font-black">{meta?.Tla ?? nr}</span>
-											{row.driver.InPit ? (
-												<Badge className="border-zinc-700 text-zinc-400">PIT</Badge>
-											) : (
-												!row.driver.Stopped &&
-												!row.driver.Retired && <Badge className="border-emerald-700 text-emerald-400">TRACK</Badge>
-											)}
-										</span>
-									</td>
-									<td
-										className={clsx("px-1 py-1 text-right font-semibold", {
-											"text-violet-400": row.gap === 0,
+								<Fragment key={`best.${nr}`}>
+									<tr
+										onClick={() => toggle(nr)}
+										className={clsx("cursor-pointer border-t border-zinc-900 hover:bg-zinc-900/60", {
+											"bg-zinc-900/80": open.has(nr),
 										})}
+										title="show or hide the laps of every set"
 									>
-										{formatLapTime(row.best)}
-									</td>
-									<td className="px-1 py-1 text-right">
-										{row.gap ? (
-											<span className={clsx("rounded px-1", heatChip(row.gap))}>+{row.gap.toFixed(3)}</span>
-										) : (
-											""
-										)}
-									</td>
-									<td className="px-1 py-1">
-										<TyreTag stint={row.stint} age={row.lap?.tyreAge} />
-									</td>
-									<td className="border-l border-zinc-800 bg-zinc-900/60 px-1 py-1 text-right">
-										{run ? (
-											<span className="inline-flex items-center gap-1.5">
-												<TyreTag stint={appData?.[nr]?.Stints?.[run.stint - 1]} />
-												<span className={clsx("font-semibold", paceGap === 0 ? "text-violet-400" : "text-zinc-100")}>
-													{formatLapTime(run.average)}
-												</span>
-												<span className="text-[10px] text-zinc-500">{run.used}L</span>
+										<td className="px-1 py-1 text-zinc-500">{ranked ? index + 1 : "-"}</td>
+										<td className="px-1 py-1">
+											<span className="flex items-center gap-1.5">
+												<span
+													className="h-4 w-1 shrink-0 rounded-full"
+													style={{ backgroundColor: `#${meta?.TeamColour ?? "71717a"}` }}
+												/>
+												<span className="font-mono font-black">{meta?.Tla ?? nr}</span>
+												{row.driver.InPit ? (
+													<Badge className="border-zinc-700 text-zinc-400">PIT</Badge>
+												) : (
+													!row.driver.Stopped &&
+													!row.driver.Retired && <Badge className="border-emerald-700 text-emerald-400">TRACK</Badge>
+												)}
 											</span>
-										) : (
-											<span className="text-zinc-700">-</span>
-										)}
-									</td>
-									<td className="bg-zinc-900/60 px-1 py-1 text-right text-zinc-400">
-										{paceGap ? (
-											<span className={clsx("rounded px-1", heatChip(paceGap))}>+{paceGap.toFixed(3)}</span>
-										) : (
-											""
-										)}
-									</td>
-									<td
-										className={clsx(
-											"border-r border-zinc-800 bg-zinc-900/60 px-1 py-1 text-right",
-											TONE_TEXT[degradationTone(run?.degradation ?? null)],
-										)}
-									>
-										{run?.degradation != null ? formatSigned(run.degradation, 2) : ""}
-									</td>
-									<td className="px-1 py-1 text-right text-zinc-400">{compound ? "" : formatLapTime(row.ideal)}</td>
-									<td
-										className={clsx("px-1 py-1 text-right", {
-											"text-amber-400": left !== null && left >= 0.2,
-											"text-zinc-500": left !== null && left < 0.2,
+										</td>
+										<td
+											className={clsx("px-1 py-1 text-right font-semibold", {
+												"text-violet-400": row.gap === 0,
+											})}
+										>
+											{formatLapTime(row.best)}
+										</td>
+										<td className="px-1 py-1 text-right">
+											{row.gap ? (
+												<span className={clsx("rounded px-1", heatChip(row.gap))}>+{row.gap.toFixed(3)}</span>
+											) : (
+												""
+											)}
+										</td>
+										<td className="px-1 py-1">
+											<TyreTag stint={row.stint} age={row.lap?.tyreAge} />
+										</td>
+										<td className="border-l border-zinc-800 bg-zinc-900/60 px-1 py-1 text-right">
+											{run ? (
+												<span className="inline-flex items-center gap-1.5">
+													<TyreTag stint={appData?.[nr]?.Stints?.[run.stint - 1]} />
+													<span className={clsx("font-semibold", paceGap === 0 ? "text-violet-400" : "text-zinc-100")}>
+														{formatLapTime(run.average)}
+													</span>
+													<span className="text-[10px] text-zinc-500">{run.used}L</span>
+												</span>
+											) : (
+												<span className="text-zinc-700">-</span>
+											)}
+										</td>
+										<td className="bg-zinc-900/60 px-1 py-1 text-right text-zinc-400">
+											{paceGap ? (
+												<span className={clsx("rounded px-1", heatChip(paceGap))}>+{paceGap.toFixed(3)}</span>
+											) : (
+												""
+											)}
+										</td>
+										<td
+											className={clsx(
+												"border-r border-zinc-800 bg-zinc-900/60 px-1 py-1 text-right",
+												TONE_TEXT[degradationTone(run?.degradation ?? null)],
+											)}
+										>
+											{run?.degradation != null ? formatSigned(run.degradation, 2) : ""}
+										</td>
+										<td className="px-1 py-1 text-right text-zinc-400">{compound ? "" : formatLapTime(row.ideal)}</td>
+										<td
+											className={clsx("px-1 py-1 text-right", {
+												"text-amber-400": left !== null && left >= 0.2,
+												"text-zinc-500": left !== null && left < 0.2,
+											})}
+										>
+											{left !== null ? (Math.abs(left) < 0.0005 ? "0.000" : formatSigned(left)) : ""}
+										</td>
+										{[0, 1, 2].map((sectorIndex) => {
+											const sector = row.sectors[sectorIndex];
+											return (
+												<td
+													key={`sector.${sectorIndex}`}
+													className={clsx(
+														"px-1 py-1 text-right",
+														sector?.fastest ? "text-violet-400" : "text-zinc-300",
+													)}
+												>
+													{sector?.time != null ? sector.time.toFixed(3) : ""}
+												</td>
+											);
 										})}
-									>
-										{left !== null ? (Math.abs(left) < 0.0005 ? "0.000" : formatSigned(left)) : ""}
-									</td>
-									{[0, 1, 2].map((sectorIndex) => {
-										const sector = row.sectors[sectorIndex];
-										return (
-											<td
-												key={`sector.${sectorIndex}`}
-												className={clsx("px-1 py-1 text-right", sector?.fastest ? "text-violet-400" : "text-zinc-300")}
-											>
-												{sector?.time != null ? sector.time.toFixed(3) : ""}
+										<td
+											className={clsx("px-1 py-1 text-right", row.speed.fastest ? "text-violet-400" : "text-zinc-400")}
+										>
+											{row.speed.value ?? ""}
+										</td>
+										<td className="px-1 py-1 text-right text-zinc-500">
+											<span className="inline-flex items-center gap-1.5">
+												{row.driver.NumberOfLaps ?? 0}
+												<TyreTag stint={current} age={current?.TotalLaps} />
+											</span>
+										</td>
+									</tr>
+									{open.has(nr) && (
+										<tr className="bg-zinc-900/40">
+											<td colSpan={15} className="px-1 py-2">
+												{/* stays in view while the wide table scrolls sideways */}
+												<div className="sticky left-1 max-w-[calc(100vw-3rem)] lg:max-w-none">
+													<StintLaps laps={laps[nr] ?? []} stints={stints} />
+												</div>
 											</td>
-										);
-									})}
-									<td className={clsx("px-1 py-1 text-right", row.speed.fastest ? "text-violet-400" : "text-zinc-400")}>
-										{row.speed.value ?? ""}
-									</td>
-									<td className="px-1 py-1 text-right text-zinc-500">
-										<span className="inline-flex items-center gap-1.5">
-											{row.driver.NumberOfLaps ?? 0}
-											<TyreTag stint={current} age={current?.TotalLaps} />
-										</span>
-									</td>
-								</tr>
+										</tr>
+									)}
+								</Fragment>
 							);
 						})}
 					</tbody>

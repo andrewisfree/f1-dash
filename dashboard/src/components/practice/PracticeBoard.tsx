@@ -93,7 +93,7 @@ export default function PracticeBoard() {
 
 				<p className="mt-2 text-xs text-zinc-500">
 					{!practice && "Made for free practice, the current session works too. "}
-					Tyres and long runs come from the {seen} laps seen on this page, laps run before it was opened are missing.
+					Tyres and long runs come from {seen} recorded laps. Tap a driver to open the laps of every set.
 				</p>
 			</div>
 
