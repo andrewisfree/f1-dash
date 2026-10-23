@@ -2,6 +2,11 @@
 
 Storico degli interventi su deploy e infrastruttura di f1-dash. Voce più recente in alto.
 
+## 2026-10-24 — Tempi ai decimi nella pagina Practice
+
+**Versione installata**: commit `60fd47e`, da un `git worktree` pulito. `/dashboard/practice`, `/dashboard/pitwall`
+e `/api/laps` rispondono 200, il bundle contiene il nuovo formato.
+
 ## 2026-10-24 — Passo gara corretto e giri per set nella pagina Practice
 
 **Versione installata**: commit `a0e1786`, da un `git worktree` pulito, dopo la fine della FP2.
