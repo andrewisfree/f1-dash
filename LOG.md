@@ -2,6 +2,12 @@
 
 Storico degli interventi su deploy e infrastruttura di f1-dash. Voce più recente in alto.
 
+## 2026-10-23 — Opzioni della Vertical nella pagina
+
+**Versione installata**: commit `2209069` (opzioni della Vertical dietro il pulsante Options della torre, tolte da
+Settings), costruita da un `git worktree` pulito; compose invariati. `/dashboard/vertical`, `/dashboard/settings` e
+`/api/laps` rispondono 200, il bundle servito contiene il pannello delle opzioni.
+
 ## 2026-10-23 — Vertical con lampeggi, Muretto con minisettori su Proxmox
 
 **Versione installata**: commit `250e2d6` (lampeggi e colori sulla Vertical, ultimo momento utile e minisettori
