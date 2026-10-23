@@ -2,6 +2,16 @@
 
 Storico degli interventi su deploy e infrastruttura di f1-dash. Voce più recente in alto.
 
+## 2026-10-23 — Vertical più leggibile, prima della FP2
+
+**Versione installata**: commit `f894dc0` (righe che scorrono, fasce DRS e pit, fantasma della sosta, gruppi
+sull'asse, mini-grafici dei distacchi, direzione gara colorata), installata alle 20:50 UTC, prima del via della FP2.
+`/dashboard`, `/dashboard/vertical` e `/api/laps` rispondono 200; il registratore è già sulla sessione della FP2
+(`11390`).
+
+**Prove**: sul PC con la replica di Singapore come gara finta, anche a 375 px. Una gara vera non è ancora stata
+vista.
+
 ## 2026-10-23 — Opzioni della Vertical nella pagina
 
 **Versione installata**: commit `2209069` (opzioni della Vertical dietro il pulsante Options della torre, tolte da
