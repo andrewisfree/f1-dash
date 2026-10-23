@@ -5,7 +5,14 @@ import clsx from "clsx";
 
 import type { State } from "@/types/state.type";
 
-import { formatLapTime, getBestLaps, getDeletedTimes, type LongRun, type PracticeLap } from "@/lib/practice";
+import {
+	formatLapTime,
+	getBestLaps,
+	getDeletedTimes,
+	PRACTICE_DIGITS,
+	type LongRun,
+	type PracticeLap,
+} from "@/lib/practice";
 import { formatSigned } from "@/lib/race";
 import { degradationTone, heatChip, TONE_TEXT } from "@/lib/tones";
 
@@ -171,11 +178,13 @@ export default function BestLaps({ state, laps, runs, compounds }: Props) {
 												"text-violet-400": row.gap === 0,
 											})}
 										>
-											{formatLapTime(row.best)}
+											{formatLapTime(row.best, PRACTICE_DIGITS)}
 										</td>
 										<td className="px-1 py-1 text-right">
 											{row.gap ? (
-												<span className={clsx("rounded px-1", heatChip(row.gap))}>+{row.gap.toFixed(3)}</span>
+												<span className={clsx("rounded px-1", heatChip(row.gap))}>
+													+{row.gap.toFixed(PRACTICE_DIGITS)}
+												</span>
 											) : (
 												""
 											)}
@@ -188,7 +197,7 @@ export default function BestLaps({ state, laps, runs, compounds }: Props) {
 												<span className="inline-flex items-center gap-1.5">
 													<TyreTag stint={appData?.[nr]?.Stints?.[run.stint - 1]} />
 													<span className={clsx("font-semibold", paceGap === 0 ? "text-violet-400" : "text-zinc-100")}>
-														{formatLapTime(run.average)}
+														{formatLapTime(run.average, PRACTICE_DIGITS)}
 													</span>
 													<span className="text-[10px] text-zinc-500">{run.used}L</span>
 												</span>
@@ -198,7 +207,9 @@ export default function BestLaps({ state, laps, runs, compounds }: Props) {
 										</td>
 										<td className="bg-zinc-900/60 px-1 py-1 text-right text-zinc-400">
 											{paceGap ? (
-												<span className={clsx("rounded px-1", heatChip(paceGap))}>+{paceGap.toFixed(3)}</span>
+												<span className={clsx("rounded px-1", heatChip(paceGap))}>
+													+{paceGap.toFixed(PRACTICE_DIGITS)}
+												</span>
 											) : (
 												""
 											)}
@@ -211,14 +222,16 @@ export default function BestLaps({ state, laps, runs, compounds }: Props) {
 										>
 											{run?.degradation != null ? formatSigned(run.degradation, 2) : ""}
 										</td>
-										<td className="px-1 py-1 text-right text-zinc-400">{compound ? "" : formatLapTime(row.ideal)}</td>
+										<td className="px-1 py-1 text-right text-zinc-400">
+											{compound ? "" : formatLapTime(row.ideal, PRACTICE_DIGITS)}
+										</td>
 										<td
 											className={clsx("px-1 py-1 text-right", {
 												"text-amber-400": left !== null && left >= 0.2,
 												"text-zinc-500": left !== null && left < 0.2,
 											})}
 										>
-											{left !== null ? (Math.abs(left) < 0.0005 ? "0.000" : formatSigned(left)) : ""}
+											{left !== null ? (Math.abs(left) < 0.05 ? "0.0" : formatSigned(left, PRACTICE_DIGITS)) : ""}
 										</td>
 										{[0, 1, 2].map((sectorIndex) => {
 											const sector = row.sectors[sectorIndex];
@@ -230,7 +243,7 @@ export default function BestLaps({ state, laps, runs, compounds }: Props) {
 														sector?.fastest ? "text-violet-400" : "text-zinc-300",
 													)}
 												>
-													{sector?.time != null ? sector.time.toFixed(3) : ""}
+													{sector?.time != null ? sector.time.toFixed(PRACTICE_DIGITS) : ""}
 												</td>
 											);
 										})}

@@ -343,10 +343,15 @@ export function getBestLaps(
 	return rows;
 }
 
-export function formatLapTime(seconds: number | null) {
-	if (seconds === null) return "-:--.---";
+// practice times are read to the tenth, thousandths only add noise there
+export const PRACTICE_DIGITS = 1;
 
-	const minutes = Math.floor(seconds / 60);
-	const rest = (seconds - minutes * 60).toFixed(3).padStart(6, "0");
+export function formatLapTime(seconds: number | null, digits = 3) {
+	if (seconds === null) return `-:--.${"-".repeat(digits)}`;
+
+	// rounded first, so 1:59.96 becomes 2:00.0 and not 1:60.0
+	const rounded = Math.round(seconds * 10 ** digits) / 10 ** digits;
+	const minutes = Math.floor(rounded / 60);
+	const rest = (rounded - minutes * 60).toFixed(digits).padStart(digits + 3, "0");
 	return minutes > 0 ? `${minutes}:${rest}` : rest;
 }

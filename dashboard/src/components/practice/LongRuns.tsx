@@ -6,7 +6,7 @@ import clsx from "clsx";
 
 import type { State } from "@/types/state.type";
 
-import { FUEL_EFFECT, formatLapTime, LONG_RUN_LAPS, type LongRun } from "@/lib/practice";
+import { FUEL_EFFECT, formatLapTime, LONG_RUN_LAPS, PRACTICE_DIGITS, type LongRun } from "@/lib/practice";
 import { formatSigned } from "@/lib/race";
 import { degradationTone, heatChip, TONE_TEXT } from "@/lib/tones";
 import { tireIcon } from "@/lib/tires";
@@ -105,11 +105,11 @@ export default function LongRuns({ state, runs, compounds }: Props) {
 							className="flex items-center gap-2 rounded-md border border-zinc-800 bg-zinc-900/60 px-2 py-1"
 						>
 							<Image src={tireIcon(name)} alt={name} width={18} height={18} />
-							<span className="text-sm font-semibold tabular-nums">{formatLapTime(run.average)}</span>
+							<span className="text-sm font-semibold tabular-nums">{formatLapTime(run.average, PRACTICE_DIGITS)}</span>
 							<span className="font-mono text-xs font-black">{tla(run.nr)}</span>
 							{index > 0 && (
 								<span className="text-xs text-amber-400 tabular-nums">
-									{formatSigned(run.average - byCompound[0][1].average)}
+									{formatSigned(run.average - byCompound[0][1].average, PRACTICE_DIGITS)}
 								</span>
 							)}
 						</div>
@@ -180,19 +180,21 @@ export default function LongRuns({ state, runs, compounds }: Props) {
 												{run.used}
 												{run.used < run.laps.length && <span className="text-zinc-600">/{run.laps.length}</span>}
 											</td>
-											<td className="px-1 py-1 text-right font-semibold">{formatLapTime(run.average)}</td>
+											<td className="px-1 py-1 text-right font-semibold">
+												{formatLapTime(run.average, PRACTICE_DIGITS)}
+											</td>
 											<td className="px-1 py-1 text-right text-zinc-400">
 												{fastest !== null && run.average > fastest ? (
 													<span className={clsx("rounded px-1", heatChip(run.average - fastest))}>
-														+{(run.average - fastest).toFixed(3)}
+														+{(run.average - fastest).toFixed(PRACTICE_DIGITS)}
 													</span>
 												) : (
 													""
 												)}
 											</td>
-											<td className="px-1 py-1 text-right text-zinc-400">{formatLapTime(run.best)}</td>
+											<td className="px-1 py-1 text-right text-zinc-400">{formatLapTime(run.best, PRACTICE_DIGITS)}</td>
 											<td className="px-1 py-1 text-right text-zinc-500">
-												{run.slope !== null ? formatSigned(run.slope) : ""}
+												{run.slope !== null ? formatSigned(run.slope, 2) : ""}
 											</td>
 											<td
 												className={clsx(
@@ -200,7 +202,7 @@ export default function LongRuns({ state, runs, compounds }: Props) {
 													TONE_TEXT[degradationTone(run.degradation)],
 												)}
 											>
-												{run.degradation !== null ? formatSigned(run.degradation) : ""}
+												{run.degradation !== null ? formatSigned(run.degradation, 2) : ""}
 											</td>
 										</tr>
 									);
@@ -216,7 +218,7 @@ export default function LongRuns({ state, runs, compounds }: Props) {
 						</p>
 						<LapChart
 							series={series}
-							format={(value) => formatLapTime(value)}
+							format={(value) => formatLapTime(value, PRACTICE_DIGITS)}
 							emptyText="Pick a run in the table"
 							height={260}
 							axis={{ tick: "T", name: "Tyre lap" }}

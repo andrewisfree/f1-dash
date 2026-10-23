@@ -2,7 +2,7 @@ import clsx from "clsx";
 
 import type { Stint } from "@/types/state.type";
 
-import { formatLapTime, median, type PracticeLap } from "@/lib/practice";
+import { formatLapTime, median, PRACTICE_DIGITS, type PracticeLap } from "@/lib/practice";
 import { formatSigned } from "@/lib/race";
 import { heatChip, TONE_CHIP } from "@/lib/tones";
 
@@ -58,15 +58,17 @@ export default function StintLaps({ laps, stints }: Props) {
 										"rounded px-1 py-0.5 tabular-nums",
 										reason !== null ? TONE_CHIP.excluded : lap.personalBest ? TONE_CHIP.gain : heatChip(delta),
 									)}
-									title={`Lap ${lap.lap}${lap.tyreAge !== null ? `, tyre lap ${lap.tyreAge}` : ""}${reason ? `, ${reason}` : delta !== null ? `, ${formatSigned(delta, 2)} on the typical lap of the set` : ""}`}
+									title={`Lap ${lap.lap}${lap.tyreAge !== null ? `, tyre lap ${lap.tyreAge}` : ""}${reason ? `, ${reason}` : delta !== null ? `, ${formatSigned(delta, PRACTICE_DIGITS)} on the typical lap of the set` : ""}`}
 								>
 									<span className="mr-1 text-[10px] opacity-60">{lap.lap}</span>
-									{lap.lapTime !== null ? formatLapTime(lap.lapTime) : "-"}
+									{lap.lapTime !== null ? formatLapTime(lap.lapTime, PRACTICE_DIGITS) : "-"}
 								</span>
 							);
 						})}
 
-						{reference !== null && <span className="ml-1 text-zinc-500">typical {formatLapTime(reference)}</span>}
+						{reference !== null && (
+							<span className="ml-1 text-zinc-500">typical {formatLapTime(reference, PRACTICE_DIGITS)}</span>
+						)}
 					</div>
 				);
 			})}
