@@ -17,3 +17,11 @@ services:
     environment:
       - NEXT_PUBLIC_LIVE_URL=http://192.168.188.161:4000
       - API_URL=http://api:80
+      # the server records the laps from the realtime service inside the compose network
+      - REALTIME_URL=http://realtime:80
+      - LAP_RECORDER_FILE=/data/laps.json
+    volumes:
+      - laps:/data
+
+volumes:
+  laps:

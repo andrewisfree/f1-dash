@@ -21,6 +21,12 @@ type LapHistoryStore = {
 	reset: (sessionKey: number | null) => void;
 	addSamples: (samples: Record<string, LapSample>) => void;
 	dropAfter: (nr: string, lap: number) => void;
+	// adds the laps recorded by the server, up to the lap shown for every driver
+	mergeRecorded: (
+		sessionKey: number | null,
+		recorded: Record<string, LapSample[]>,
+		shownLaps: Record<string, number>,
+	) => void;
 };
 
 // kept in local storage so a reload during a session does not lose the laps seen so far
@@ -40,6 +46,34 @@ export const useLapHistoryStore = create<LapHistoryStore>()(
 					}
 
 					return { laps };
+				}),
+			mergeRecorded: (sessionKey, recorded, shownLaps) =>
+				set((prev) => {
+					if (prev.sessionKey !== sessionKey) return prev;
+
+					const laps = { ...prev.laps };
+					let changed = false;
+
+					for (const [nr, samples] of Object.entries(recorded)) {
+						const shown = shownLaps[nr];
+						if (shown === undefined) continue;
+
+						// the server saw the whole session, its sample wins over the one seen here
+						const byLap = new Map((laps[nr] ?? []).map((sample) => [sample.lap, sample]));
+						for (const sample of samples) {
+							if (sample.lap > shown) continue;
+
+							const current = byLap.get(sample.lap);
+							if (current && JSON.stringify(current) === JSON.stringify(sample)) continue;
+
+							byLap.set(sample.lap, sample);
+							changed = true;
+						}
+
+						laps[nr] = Array.from(byLap.values()).sort((a, b) => a.lap - b.lap);
+					}
+
+					return changed ? { laps } : prev;
 				}),
 			dropAfter: (nr, lap) =>
 				set((prev) => {
