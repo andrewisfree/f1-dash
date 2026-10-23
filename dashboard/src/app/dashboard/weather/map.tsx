@@ -27,9 +27,7 @@ export function WeatherMap() {
 	const [frames, setFrames] = useState<{ id: number; time: number }[]>([]);
 	const currentFrameRef = useRef<number>(0);
 
-	const handleMapLoad = async () => {
-		if (!mapRef.current) return;
-
+	const addRadarLayers = async (map: Map) => {
 		const rainviewer = await getRainviewer();
 		if (!rainviewer) return;
 
@@ -37,9 +35,13 @@ export function WeatherMap() {
 
 		for (let i = 0; i < pathFrames.length; i++) {
 			const frame = pathFrames[i];
+			const id = `rainviewer-frame-${i}`;
 
-			mapRef.current.addLayer({
-				id: `rainviewer-frame-${i}`,
+			// a layer added before would fail with "Layer already exists"
+			if (map.getLayer(id)) continue;
+
+			map.addLayer({
+				id,
 				type: "raster",
 				source: {
 					type: "raster",
@@ -61,19 +63,23 @@ export function WeatherMap() {
 	};
 
 	useEffect(() => {
+		if (!mapContainerRef.current || !meeting) return;
+
+		// the cleanup marks the effect as stale, a map made for an earlier meeting must not touch the state any more
+		let cancelled = false;
+		let libMap: Map | undefined;
+
 		(async () => {
-			if (!mapContainerRef.current) return;
-
-			if (!meeting) return;
-
 			const [coordsC, coordsA] = await Promise.all([
 				fetchCoords(`${meeting.Country.Name}, ${meeting.Location} circuit`),
 				fetchCoords(`${meeting.Country.Name}, ${meeting.Location} autodrome`),
 			]);
 
+			if (cancelled || !mapContainerRef.current) return;
+
 			const coords = coordsC || coordsA;
 
-			const libMap = new maplibregl.Map({
+			libMap = new maplibregl.Map({
 				container: mapContainerRef.current,
 				style: "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json",
 				center: coords ? [coords.lon, coords.lat] : undefined,
@@ -83,18 +89,27 @@ export function WeatherMap() {
 				},
 			});
 
-			libMap.on("load", async () => {
+			const map = libMap;
+			mapRef.current = map;
+
+			map.on("load", async () => {
+				if (cancelled) return;
+
 				setLoading(false);
 
 				if (coords) {
-					new Marker().setLngLat([coords.lon, coords.lat]).addTo(libMap);
+					new Marker().setLngLat([coords.lon, coords.lat]).addTo(map);
 				}
 
-				await handleMapLoad();
+				await addRadarLayers(map);
 			});
-
-			mapRef.current = libMap;
 		})();
+
+		return () => {
+			cancelled = true;
+			libMap?.remove();
+			mapRef.current = null;
+		};
 	}, [meeting]);
 
 	const setFrame = (idx: number) => {
