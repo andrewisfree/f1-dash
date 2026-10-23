@@ -44,7 +44,7 @@ export const useLapHistory = () => {
 			// the state shown is delayed, its clock stands still while the delay is paused
 			const delay = useSettingsStore.getState().delay;
 			const now = Date.now() - delay * 1000;
-			// a smaller delay skips ahead, the laps completed in between were not seen
+			// a smaller delay skips ahead, a lap completed inside the skipped part is kept but not clean
 			const skipped = delay < lastDelay;
 			lastDelay = delay;
 
@@ -76,13 +76,14 @@ export const useLapHistory = () => {
 					// stepping back over a lap that just ended keeps what is known about it
 					tracker.disturbed = undone ? !undone.clean : true;
 				} else if (lap > tracker.lastLap) {
-					const seen = !skipped && lap - tracker.lastLap === 1;
+					// one new lap is known even after a skip, only a larger jump loses laps
+					const seen = lap - tracker.lastLap === 1;
 
-					tracker.pending = seen ? { lap, at: now, clean: !tracker.disturbed } : null;
+					tracker.pending = seen ? { lap, at: now, clean: !tracker.disturbed && !skipped } : null;
 					tracker.disturbed = !seen;
 					tracker.lastLap = lap;
 				} else if (skipped) {
-					tracker.pending = null;
+					// the pending lap is kept, it only settles later, the lap in progress may have changed
 					tracker.disturbed = true;
 				}
 
