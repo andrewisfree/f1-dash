@@ -2,6 +2,17 @@
 
 Storico degli interventi su deploy e infrastruttura di f1-dash. Voce più recente in alto.
 
+## 2026-10-24 — Passo gara corretto e giri per set nella pagina Practice
+
+**Versione installata**: commit `a0e1786`, da un `git worktree` pulito, dopo la fine della FP2.
+- `0ce1289`: i giri da long run non vengono più scambiati per giri lenti (soglia dal 7% al 12% sul best, un singolo
+  giro lento non spezza una run avviata); il traffico si misura sulla linea di tendenza della run (Theil-Sen,
+  oltre 0,8 s) e non più sulla mediana. Sui giri della FP2: long run per tutti i 22 piloti, prima 7 ne erano privi.
+- `a0e1786`: toccando un pilota nella tabella Practice si aprono i giri di ogni set.
+
+**Verifiche**: `/dashboard/practice` e `/api/laps` rispondono 200, il bundle contiene la nuova tabella. Il
+registratore ha ritrovato i giri della FP2 dopo ogni riavvio del container (564 giri, sessione `11390`).
+
 ## 2026-10-23 — Vertical più leggibile, prima della FP2
 
 **Versione installata**: commit `f894dc0` (righe che scorrono, fasce DRS e pit, fantasma della sosta, gruppi
