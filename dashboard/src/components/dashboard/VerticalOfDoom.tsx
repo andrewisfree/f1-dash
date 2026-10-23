@@ -27,6 +27,7 @@ import { useSettingsStore } from "@/stores/useSettingsStore";
 import { useRaceEvents, type RaceEvent, type RaceEventKind } from "@/hooks/useRaceEvents";
 import Badge from "@/components/driver/Badge";
 import TrendText from "@/components/driver/TrendText";
+import VerticalOptions from "@/components/dashboard/VerticalOptions";
 import type { Driver, Sector, Stint, TimingDataDriver } from "@/types/state.type";
 
 const TRACK_HEIGHT = 1040;
@@ -115,6 +116,7 @@ export default function VerticalOfDoom() {
 	const pitLoss = useSettingsStore((store) => store.verticalPitLoss);
 
 	const [selected, setSelected] = useState<string | null>(null);
+	const [showOptions, setShowOptions] = useState<boolean>(false);
 	const events = useRaceEvents();
 
 	const sessionPart = state?.TimingData?.SessionPart;
@@ -352,8 +354,20 @@ export default function VerticalOfDoom() {
 						</span>
 					)}
 					<span>{points.length + offTrack.length} drivers</span>
+					<button
+						type="button"
+						onClick={() => setShowOptions((open) => !open)}
+						className={clsx(
+							"cursor-pointer rounded border px-2 py-0.5",
+							showOptions ? "border-zinc-300 text-zinc-200" : "border-zinc-700 text-zinc-400",
+						)}
+					>
+						Options
+					</button>
 				</div>
 			</div>
+
+			{showOptions && <VerticalOptions />}
 
 			{neutralized && (
 				<div className="border-b border-zinc-800 bg-amber-950/40 px-3 py-1 text-xs text-amber-300">
