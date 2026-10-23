@@ -1,16 +1,35 @@
 import { AnimatePresence } from "motion/react";
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import clsx from "clsx";
 
 import { useSettingsStore } from "@/stores/useSettingsStore";
 import { useDataStore } from "@/stores/useDataStore";
 
+import { getMessageTone } from "@/lib/raceControl";
 import { sortUtc } from "@/lib/sorting";
 
 import { RaceControlMessage } from "@/components/dashboard/RaceControlMessage";
 
-export default function RaceControl() {
+// deleted laps of these first cars still count
+const FRONT = 10;
+
+type Props = {
+	// colour the messages by importance and fade the service ones
+	prioritize?: boolean;
+};
+
+export default function RaceControl({ prioritize = false }: Props) {
 	const messages = useDataStore((state) => state.state?.RaceControlMessages?.Messages);
+	const lines = useDataStore((state) => state.state?.TimingData?.Lines);
+	const front = useMemo(
+		() =>
+			new Set(
+				Object.values(lines ?? {})
+					.filter((driver) => parseInt(driver.Position) <= FRONT)
+					.map((driver) => driver.RacingNumber),
+			),
+		[lines],
+	);
 	const gmtOffset = useDataStore((state) => state.state?.SessionInfo?.GmtOffset);
 
 	const raceControlChime = useSettingsStore((state) => state.raceControlChime);
@@ -63,7 +82,12 @@ export default function RaceControl() {
 						.sort(sortUtc)
 						.filter((msg) => (msg.Flag ? msg.Flag.toLowerCase() !== "blue" : true))
 						.map((msg, i) => (
-							<RaceControlMessage key={`msg.${i}`} msg={msg} gmtOffset={gmtOffset} />
+							<RaceControlMessage
+								key={`msg.${i}`}
+								msg={msg}
+								gmtOffset={gmtOffset}
+								tone={prioritize ? getMessageTone(msg, front) : undefined}
+							/>
 						))}
 				</AnimatePresence>
 			)}

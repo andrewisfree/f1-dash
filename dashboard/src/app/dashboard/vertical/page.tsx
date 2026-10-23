@@ -13,7 +13,7 @@ export default function VerticalPage() {
 				</div>
 
 				<div className="h-[30rem] overflow-y-auto rounded-lg border border-zinc-800 p-2 xl:h-auto xl:max-h-[calc(100vh-6rem)]">
-					<RaceControl />
+					<RaceControl prioritize />
 				</div>
 			</div>
 

@@ -36,6 +36,15 @@ const MIN_TICK_GAP = 16;
 const TICKS = [1, 2, 3, 5, 10, 15, 20, 30, 45, 60, 90];
 // within this the car behind can use DRS, a battle
 const BATTLE_SECONDS = 1;
+// dots on the axis closer than this are drawn as one group
+const CLUSTER_PX = 7;
+const CLUSTER_MIN = 3;
+// laps of the gap to the car ahead drawn next to it
+const SPARK_LAPS = 6;
+// track limits below this are not worth the room in the row
+const TRACK_LIMITS_SHOWN = 3;
+// the pit window band reaches at most this far from the rejoin point
+const PIT_BAND_PX = 24;
 
 // the colour a row lights up in when something happens to the car
 const FLASH: Record<RaceEventKind, string> = {
@@ -80,6 +89,42 @@ function gapChip(trend: Trend | null): string {
 	if (trend.rate < 0) return "bg-emerald-500/20 text-emerald-200";
 	if (trend.rate >= 0.3) return "bg-red-500/35 text-red-100";
 	return "bg-red-500/20 text-red-200";
+}
+
+/**
+ * a tiny line of the gap to the car ahead over the last laps, going down when catching
+ */
+function Sparkline({ values, tone }: { values: number[]; tone: Trend["tone"] | undefined }) {
+	if (values.length < 2) return null;
+
+	const width = 36;
+	const height = 10;
+	const min = Math.min(...values);
+	const max = Math.max(...values);
+	const range = Math.max(max - min, 0.05);
+	const line = values
+		.map((value, index) => {
+			const x = (index / (values.length - 1)) * width;
+			const y = height - ((value - min) / range) * height;
+			return `${x.toFixed(1)},${y.toFixed(1)}`;
+		})
+		.join(" ");
+
+	return (
+		<svg width={width} height={height} className="inline-block overflow-visible align-middle">
+			<polyline
+				points={line}
+				fill="none"
+				strokeWidth={1.5}
+				strokeLinejoin="round"
+				className={clsx({
+					"stroke-emerald-400": tone === "closing",
+					"stroke-red-400": tone === "opening",
+					"stroke-zinc-500": tone !== "closing" && tone !== "opening",
+				})}
+			/>
+		</svg>
+	);
 }
 
 function spreadLabels(points: Omit<DriverPoint, "labelY">[]): DriverPoint[] {
@@ -216,6 +261,37 @@ export default function VerticalOfDoom() {
 		return result;
 	}, [history, isRace, lapsRemaining, neutralized, points, reference]);
 
+	// the gap to the car ahead now, lap by lap, for the sparklines
+	const intervalHistory = useMemo(() => {
+		const result = new Map<string, number[]>();
+		if (!isRace) return result;
+
+		points.forEach((point, index) => {
+			const ahead = points[index - 1];
+			if (!ahead) return;
+
+			const aheadByLap = new Map((history[ahead.driver.RacingNumber] ?? []).map((sample) => [sample.lap, sample]));
+			const values = (history[point.driver.RacingNumber] ?? [])
+				.filter((sample) => sample.clean && sample.gap !== null && aheadByLap.get(sample.lap)?.gap != null)
+				.slice(-SPARK_LAPS)
+				.map((sample) => sample.gap! - aheadByLap.get(sample.lap)!.gap!);
+			result.set(point.driver.RacingNumber, values);
+		});
+
+		return result;
+	}, [history, isRace, points]);
+
+	// cars bunched on the axis become one pill, their dots would sit on top of each other
+	const clusters = useMemo(() => {
+		const groups: DriverPoint[][] = [];
+		for (const point of points) {
+			const last = groups[groups.length - 1];
+			if (last && point.rawY - last[last.length - 1].rawY < CLUSTER_PX) last.push(point);
+			else groups.push([point]);
+		}
+		return groups.filter((group) => group.length >= CLUSTER_MIN);
+	}, [points]);
+
 	// positions once the pending time penalties are applied
 	const penaltyPositions = useMemo(() => {
 		const result = new Map<string, number>();
@@ -277,12 +353,13 @@ export default function VerticalOfDoom() {
 	const referencePoint = points[referenceIndex];
 	const span = scale.hi - scale.lo;
 	const alert = ALERT[state.TrackStatus?.Status ?? ""];
+	const clustered = new Set(clusters.flatMap((group) => group.map((point) => point.driver.RacingNumber)));
 
 	const renderRow = (
 		driver: TimingDataDriver,
 		gapLabel: string,
 		trend: Trend | null,
-		extra?: RowExtra & { battle?: Trend | "close" | null },
+		extra?: RowExtra & { battle?: Trend | "close" | null; spark?: number[] },
 	) => {
 		const nr = driver.RacingNumber;
 		const appData = state.TimingAppData?.Lines[nr];
@@ -296,6 +373,7 @@ export default function VerticalOfDoom() {
 				key={`row.${nr}.${event?.id ?? 0}`}
 				event={event}
 				battle={extra?.battle ?? null}
+				spark={extra?.spark ?? []}
 				gained={isRace && Number.isFinite(grid) && Number.isFinite(position) ? grid - position : null}
 				lapDelta={fieldLap !== null && lastLap !== null && !driver.InPit && !driver.PitOut ? lastLap - fieldLap : null}
 				driver={driver}
@@ -458,6 +536,66 @@ export default function VerticalOfDoom() {
 						</div>
 					)}
 
+					{isRace &&
+						!neutralized &&
+						points.slice(1).map((point, index) => {
+							const ahead = points[index];
+							if (point.gap - ahead.gap >= BATTLE_SECONDS) return null;
+
+							return (
+								<div
+									key={`drs.${point.driver.RacingNumber}`}
+									className="absolute left-2 w-7 rounded-sm bg-emerald-500/15 transition-[top,height] duration-700"
+									style={{ top: ahead.rawY, height: Math.max(2, point.rawY - ahead.rawY) }}
+									title="within a second, DRS range"
+								/>
+							);
+						})}
+
+					{pitWindow &&
+						(() => {
+							const ahead = points.find((point) => point.driver.RacingNumber === pitWindow.ahead?.nr);
+							const behind = points.find((point) => point.driver.RacingNumber === pitWindow.behind?.nr);
+							// the band spans the two cars it would rejoin between, kept near the rejoin point
+							const rejoin = toY(pitWindow.gap - referenceGap);
+							const top = Math.max(ahead?.rawY ?? rejoin - 8, rejoin - PIT_BAND_PX);
+							const bottom = Math.min(behind?.rawY ?? rejoin + 8, rejoin + PIT_BAND_PX);
+
+							return (
+								<div
+									className="absolute right-0 left-3 bg-sky-500/10"
+									style={{ top, height: Math.max(4, bottom - top) }}
+									title="where the selected driver rejoins after a stop"
+								/>
+							);
+						})()}
+
+					{pitWindow && reference && (
+						<div
+							className="pointer-events-none absolute right-2 z-20 -translate-y-1/2 rounded-md border border-dashed border-sky-400/80 bg-sky-950/80 px-2 py-0.5 text-xs text-sky-200 tabular-nums"
+							style={{ top: toY(pitWindow.gap - referenceGap) }}
+						>
+							<span className="font-mono font-black">{tla(reference)}</span> after a stop: P{pitWindow.position}
+							{pitWindow.ahead && `, ${pitWindow.ahead.margin.toFixed(1)}s behind ${tla(pitWindow.ahead.nr)}`}
+						</div>
+					)}
+
+					{clusters.map((group) => {
+						const first = group[0];
+						const last = group[group.length - 1];
+
+						return (
+							<div
+								key={`cluster.${first.driver.RacingNumber}`}
+								className="absolute left-[17px] z-20 -translate-x-1/2 -translate-y-1/2 rounded-full border border-zinc-600 bg-zinc-800 px-1 text-[9px] font-black text-zinc-200 tabular-nums transition-[top] duration-700"
+								style={{ top: (first.rawY + last.rawY) / 2 }}
+								title={`${group.map((point) => tla(point.driver.RacingNumber)).join(", ")} within ${(last.gap - first.gap).toFixed(2)}s`}
+							>
+								{group.length}
+							</div>
+						);
+					})}
+
 					{pitWindow && (
 						<div className="absolute right-0 left-0" style={{ top: toY(pitWindow.gap - referenceGap) }}>
 							<div className="absolute right-0 left-3 border-t border-dashed border-sky-500/70" />
@@ -531,10 +669,12 @@ export default function VerticalOfDoom() {
 
 						return (
 							<div key={nr}>
-								<div
-									className="absolute left-[17px] z-10 h-2 w-2 -translate-x-1/2 rounded-full"
-									style={{ top: point.rawY, backgroundColor: teamColour }}
-								/>
+								{!clustered.has(nr) && (
+									<div
+										className="absolute left-[17px] z-10 h-2 w-2 -translate-x-1/2 rounded-full transition-[top] duration-700"
+										style={{ top: point.rawY, backgroundColor: teamColour }}
+									/>
+								)}
 								{penalty > 0 && (
 									<div
 										title={`${tla(nr)} with ${penalty}s penalty`}
@@ -544,7 +684,7 @@ export default function VerticalOfDoom() {
 								)}
 								{Math.abs(labelPull) > 2 && (
 									<div
-										className="absolute left-6 w-16 border-t border-dashed border-zinc-700/50 sm:w-20"
+										className="absolute left-6 w-16 border-t border-dashed border-zinc-700/50 transition-[top,transform] duration-700 sm:w-20"
 										style={{
 											top: point.rawY,
 											transform: `translateY(${labelPull / 2}px) rotate(${labelPull > 0 ? 18 : -18}deg)`,
@@ -552,12 +692,17 @@ export default function VerticalOfDoom() {
 									/>
 								)}
 
-								{renderRow(driver, gapLabel, (reference ? trend?.reference : trend?.interval) ?? null, {
-									className: "absolute right-0 left-20 sm:left-24",
-									style: { top: point.labelY - 16 },
-									onSelect: () => setSelected(nr === reference ? null : nr),
-									battle: close ? (trend?.interval ?? "close") : null,
-								})}
+								{/* the place in the tower moves smoothly, the row inside restarts its flash on every event */}
+								<div
+									className="absolute right-0 left-20 transition-[top] duration-700 ease-out sm:left-24"
+									style={{ top: point.labelY - 16 }}
+								>
+									{renderRow(driver, gapLabel, (reference ? trend?.reference : trend?.interval) ?? null, {
+										onSelect: () => setSelected(nr === reference ? null : nr),
+										battle: close ? (trend?.interval ?? "close") : null,
+										spark: reference ? undefined : intervalHistory.get(nr),
+									})}
+								</div>
 							</div>
 						);
 					})}
@@ -592,6 +737,8 @@ type DriverRowProps = RowExtra & {
 	gained: number | null;
 	// last lap against the typical last lap of the field, negative when faster
 	lapDelta: number | null;
+	// gap to the car ahead over the last laps
+	spark: number[];
 	driver: TimingDataDriver;
 	meta: Driver | undefined;
 	stint: Stint | undefined;
@@ -610,6 +757,7 @@ function DriverRow({
 	battle,
 	gained,
 	lapDelta,
+	spark,
 	driver,
 	meta,
 	stint,
@@ -628,20 +776,27 @@ function DriverRow({
 	const inPit = driver.InPit || driver.PitOut;
 	const wear = tyreWear(stint);
 	const battleTone = battle === null ? null : battle === "close" || battle.tone === "stable" ? "even" : battle.tone;
+	const teamColour = `#${meta?.TeamColour ?? "71717a"}`;
+	const rowStyle: CSSProperties = {
+		...style,
+		...(event ? { "--flash": FLASH[event.kind] } : {}),
+		// the favourite stands out in its team colour
+		...(favorite && !selected && !battleTone ? { borderColor: teamColour } : {}),
+	};
 
 	return (
 		<div
 			onClick={onSelect}
-			style={event ? ({ ...style, "--flash": FLASH[event.kind] } as CSSProperties) : style}
+			style={rowStyle}
 			className={clsx(
 				"grid min-h-8 grid-cols-[4.25rem_4.25rem_minmax(0,1fr)_auto] items-center gap-1.5 rounded-md border px-2 py-0.5 text-sm shadow-lg shadow-black/20 select-none sm:grid-cols-[5rem_4.5rem_minmax(0,1fr)_auto_2.75rem] sm:gap-2",
 				className,
 				{
 					"cursor-pointer": onSelect,
 					"border-zinc-800 bg-zinc-900/95": !favorite && !danger && !selected,
-					"border-sky-700 bg-sky-950/60": favorite && !selected,
+					"border-2 bg-zinc-900": favorite && !danger && !selected,
 					"border-red-800 bg-red-950/70": danger && !selected,
-					"border-zinc-200 bg-zinc-800": selected,
+					"border-zinc-200 bg-zinc-800 ring-2 ring-zinc-200/40": selected,
 					"opacity-45": driver.KnockedOut || driver.Retired || driver.Stopped,
 					"animate-row-flash": event,
 					"border-l-4": battleTone,
@@ -654,11 +809,10 @@ function DriverRow({
 			<div className="flex flex-col gap-0.5 overflow-hidden">
 				<div className="flex items-center gap-1.5">
 					<span className="w-4 text-right text-xs text-zinc-500 tabular-nums">{driver.Position}</span>
-					<span
-						className="h-5 w-1 shrink-0 rounded-full"
-						style={{ backgroundColor: `#${meta?.TeamColour ?? "71717a"}` }}
-					/>
-					<span className="font-mono text-base leading-5 font-black">{meta?.Tla ?? driver.RacingNumber}</span>
+					<span className="h-5 w-1 shrink-0 rounded-full" style={{ backgroundColor: teamColour }} />
+					<span className={clsx("font-mono leading-5 font-black", favorite || selected ? "text-lg" : "text-base")}>
+						{meta?.Tla ?? driver.RacingNumber}
+					</span>
 					{gained !== null && gained !== 0 && (
 						<span
 							className={clsx(
@@ -684,14 +838,20 @@ function DriverRow({
 			</div>
 
 			<div className="text-right leading-tight tabular-nums">
-				<div className={clsx("inline-block rounded px-1 text-xs", gapChip(trend) || "text-zinc-400")}>
+				<div className={clsx("inline-block rounded px-1 text-sm font-semibold", gapChip(trend) || "text-zinc-200")}>
 					{gapLabel}
 					{battleTone && <span className="ml-1 text-[10px] font-black">DRS</span>}
 				</div>
-				{trend && trend.tone !== "stable" && <TrendText trend={trend} className="block text-[10px]" />}
+				{(spark.length > 1 || (trend && trend.tone !== "stable")) && (
+					<div className="flex items-center justify-end gap-1">
+						<Sparkline values={spark} tone={trend?.tone} />
+						{trend && trend.tone !== "stable" && <TrendText trend={trend} className="text-[10px]" />}
+					</div>
+				)}
 			</div>
 
-			<div className="flex min-w-0 items-center gap-1 overflow-hidden">
+			{/* on phones the badges show once the row is tapped */}
+			<div className={clsx("min-w-0 items-center gap-1 overflow-hidden", selected ? "flex" : "hidden sm:flex")}>
 				{inPit && <Badge className="border-sky-500 text-sky-400">{driver.PitOut ? "OUT" : "PIT"}</Badge>}
 				{!inPit && drsOn && <Badge className="border-emerald-500 text-emerald-400">DRS</Badge>}
 				{flags && flags.penalty > 0 && (
@@ -702,12 +862,8 @@ function DriverRow({
 				)}
 				{flags?.investigation && <Badge className="border-amber-500 text-amber-400">INV</Badge>}
 				{flags?.warning && <Badge className="border-zinc-300 text-zinc-200">B/W</Badge>}
-				{flags && flags.trackLimits > 0 && (
-					<Badge
-						className={flags.trackLimits >= 3 ? "border-amber-500 text-amber-400" : "border-zinc-700 text-zinc-400"}
-					>
-						TL{flags.trackLimits}
-					</Badge>
+				{flags && flags.trackLimits >= TRACK_LIMITS_SHOWN && (
+					<Badge className="border-amber-500 text-amber-400">TL{flags.trackLimits}</Badge>
 				)}
 				{driver.Cutoff && <span className="truncate text-xs text-zinc-500">Cutoff</span>}
 
@@ -715,7 +871,7 @@ function DriverRow({
 					{driver.Sectors.slice(0, 3).map((sector, index) => (
 						<span
 							key={`${driver.RacingNumber}.sector.${index}`}
-							className={clsx("h-1.5 w-5 rounded-full", sectorClass(sector))}
+							className={clsx("h-1 w-4 rounded-full", sectorClass(sector))}
 						/>
 					))}
 				</div>
