@@ -4,12 +4,16 @@ import { parseLapSeconds } from "@/lib/gaps";
 
 import type { LapSample } from "@/stores/useLapHistoryStore";
 
-// slower than this share of the best lap of the driver is a cool down lap
-const COOL_DOWN_RATIO = 1.07;
+// slower than this share of the best lap of the driver is a cool down lap,
+// race runs on full tanks are 5 to 8% off a qualifying lap and must stay in
+const COOL_DOWN_RATIO = 1.12;
+// timed laps a run needs before a single slow lap inside it no longer ends it
+const RUN_BRIDGE_AFTER = 3;
 // the fewest laps in a row that make a long run
 export const LONG_RUN_LAPS = 5;
-// laps of a run slower than its median by more than this share are traffic or mistakes
-const OUTLIER_RATIO = 1.012;
+// laps of a run slower than its trend by more than this are traffic or mistakes,
+// the trend keeps the laps that are slower only because the tyres wear
+const OUTLIER_SECONDS = 0.8;
 // burning fuel makes the car faster by about this much per lap, the tyre loss is hidden by it
 export const FUEL_EFFECT = 0.06;
 
@@ -21,6 +25,8 @@ export type PracticeLap = LapSample & {
 	tyreAge: number | null;
 	// left out of the run average, a traffic or mistake lap
 	outlier: boolean;
+	// the long run the lap belongs to, null outside one
+	run: number | null;
 };
 
 export type LongRun = {
@@ -54,6 +60,22 @@ export function linearSlope(points: { x: number; y: number }[]): number | null {
 	const variance = points.reduce((sum, point) => sum + (point.x - meanX) ** 2, 0);
 
 	return variance > 0 ? covariance / variance : null;
+}
+
+/**
+ * the trend of a run, a straight line that a few traffic laps do not pull away (Theil-Sen)
+ */
+function robustTrend(points: { x: number; y: number }[]): (x: number) => number {
+	const slopes: number[] = [];
+	for (let i = 0; i < points.length; i++) {
+		for (let j = i + 1; j < points.length; j++) {
+			if (points[j].x !== points[i].x) slopes.push((points[j].y - points[i].y) / (points[j].x - points[i].x));
+		}
+	}
+
+	const slope = slopes.length > 0 ? median(slopes) : 0;
+	const intercept = median(points.map((point) => point.y - slope * point.x));
+	return (x) => intercept + slope * x;
 }
 
 export const isNewTyre = (stint?: Stint) => stint?.New?.toLowerCase() === "true";
@@ -104,33 +126,58 @@ export function classifyLaps(
 					: "push",
 		tyreAge: ages.get(sample.lap) ?? null,
 		outlier: false,
+		run: null,
 	}));
 
-	// a run is a row of timed laps on the same set, a cool down or a stop ends it
-	let start = 0;
-	for (let index = 0; index <= laps.length; index++) {
-		const lap = laps[index];
-		const previous = laps[index - 1];
-		const continues =
-			lap &&
-			previous &&
-			lap.kind === "push" &&
-			previous.kind === "push" &&
-			lap.stint === previous.stint &&
-			lap.lap === previous.lap + 1;
-		if (continues) continue;
+	// a run is a row of timed laps on the same set, a stop ends it and so does a cool down lap,
+	// unless it is a single slow lap between timed laps of a run already going, traffic or a moment
+	let run: PracticeLap[] = [];
+	let runId = 0;
 
-		const run = laps.slice(start, index).filter((entry) => entry.kind === "push");
+	const close = () => {
 		if (run.length >= LONG_RUN_LAPS) {
-			const middle = median(run.map((entry) => entry.lapTime!));
+			const trend = robustTrend(run.map((entry) => ({ x: entry.lap, y: entry.lapTime! })));
+			runId++;
 			for (const entry of run) {
 				entry.kind = "long";
-				entry.outlier = entry.lapTime! > middle * OUTLIER_RATIO;
+				entry.outlier = entry.lapTime! - trend(entry.lap) > OUTLIER_SECONDS;
+				entry.run = runId;
 			}
 		}
+		run = [];
+	};
 
-		start = index;
+	let last: PracticeLap | null = null;
+	for (let index = 0; index < laps.length; index++) {
+		const lap = laps[index];
+		const follows = last !== null && lap.stint === last.stint && lap.lap === last.lap + 1;
+
+		if (lap.kind === "push") {
+			if (!follows) close();
+			run.push(lap);
+			last = lap;
+			continue;
+		}
+
+		const next = laps[index + 1];
+		const bridged =
+			lap.kind === "cool" &&
+			follows &&
+			run.length >= RUN_BRIDGE_AFTER &&
+			next?.kind === "push" &&
+			next.stint === lap.stint &&
+			next.lap === lap.lap + 1;
+
+		if (bridged) {
+			// stays a cool lap, out of the average, but the run goes on
+			last = lap;
+			continue;
+		}
+
+		close();
+		last = null;
 	}
+	close();
 
 	return laps;
 }
@@ -138,28 +185,30 @@ export function classifyLaps(
 export function getLongRuns(nr: string, laps: PracticeLap[], appData: TimingAppDataDriver | undefined): LongRun[] {
 	const runs: LongRun[] = [];
 
-	for (const lap of laps) {
-		if (lap.kind !== "long") continue;
+	const byId = new Map<number, LongRun>();
 
-		const last = runs[runs.length - 1];
-		const previous = last?.laps[last.laps.length - 1];
-		if (last && previous && previous.lap === lap.lap - 1 && previous.stint === lap.stint) {
-			last.laps.push(lap);
-		} else {
+	for (const lap of laps) {
+		if (lap.kind !== "long" || lap.run === null) continue;
+
+		let run = byId.get(lap.run);
+		if (!run) {
 			const stint = appData?.Stints?.[lap.stint - 1];
-			runs.push({
+			run = {
 				nr,
 				stint: lap.stint,
 				compound: stint?.Compound,
 				isNew: isNewTyre(stint),
-				laps: [lap],
+				laps: [],
 				used: 0,
 				average: 0,
 				best: 0,
 				slope: null,
 				degradation: null,
-			});
+			};
+			byId.set(lap.run, run);
+			runs.push(run);
 		}
+		run.laps.push(lap);
 	}
 
 	for (const run of runs) {
