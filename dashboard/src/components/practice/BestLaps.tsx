@@ -5,7 +5,7 @@ import clsx from "clsx";
 
 import type { State } from "@/types/state.type";
 
-import { formatLapTime, getBestLaps, type LongRun, type PracticeLap } from "@/lib/practice";
+import { formatLapTime, getBestLaps, getDeletedTimes, type LongRun, type PracticeLap } from "@/lib/practice";
 import { formatSigned } from "@/lib/race";
 
 import Badge from "@/components/driver/Badge";
@@ -46,7 +46,11 @@ export default function BestLaps({ state, laps, runs, compounds }: Props) {
 	}, [compound, runs]);
 
 	const fastestPace = Math.min(...Array.from(pace.values()).map((run) => run.average));
-	const rows = getBestLaps(lines, state.TimingStats?.Lines, laps, appData, compound);
+	const deleted = useMemo(
+		() => getDeletedTimes(state.RaceControlMessages?.Messages),
+		[state.RaceControlMessages?.Messages],
+	);
+	const rows = getBestLaps(lines, state.TimingStats?.Lines, laps, appData, compound, deleted);
 	if (sort === "pace") {
 		rows.sort(
 			(a, b) =>
@@ -61,9 +65,7 @@ export default function BestLaps({ state, laps, runs, compounds }: Props) {
 				<p className="text-xs text-zinc-500">
 					Best laps
 					<span className="ml-2 text-zinc-600">
-						{compound
-							? "on this compound, from the laps seen on this page"
-							: "ideal lap is the sum of the best sectors"}
+						{compound ? "best lap of each driver on this compound" : "ideal lap is the sum of the best sectors"}
 					</span>
 				</p>
 				<div className="flex items-center gap-3">

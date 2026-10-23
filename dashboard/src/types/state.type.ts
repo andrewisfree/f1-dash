@@ -56,8 +56,12 @@ export type TimingAppDataDriver = {
 
 export type Stint = {
 	TotalLaps?: number;
+	StartLaps?: number;
 	Compound?: "SOFT" | "MEDIUM" | "HARD" | "INTERMEDIATE" | "WET";
 	New?: string; // TRUE | FALSE
+	// best lap on this set and the lap it was done in
+	LapTime?: string;
+	LapNumber?: number;
 };
 
 export type WeatherData = {
@@ -252,6 +256,8 @@ export type TimingStatsDriver = {
 export type PersonalBestLapTime = {
 	Value: string;
 	Position: number;
+	// the lap it was set in, sent with the best lap time, one lower than NumberOfLaps
+	Lap?: number;
 };
 
 export type TopThreeDriver = {

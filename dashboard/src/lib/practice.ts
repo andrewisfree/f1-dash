@@ -1,4 +1,4 @@
-import type { Stint, TimingAppDataDriver, TimingDataDriver, TimingStatsDriver } from "@/types/state.type";
+import type { Message, Stint, TimingAppDataDriver, TimingDataDriver, TimingStatsDriver } from "@/types/state.type";
 
 import { parseLapSeconds } from "@/lib/gaps";
 
@@ -181,16 +181,34 @@ export type BestLapRow = {
 	driver: TimingDataDriver;
 	best: number | null;
 	gap: number | null;
-	// the lap of the best time, when it was seen
+	// the lap of the best time, when it was seen on the page
 	lap: PracticeLap | null;
+	// the set the best time was done on
 	stint: Stint | undefined;
 	sectors: { time: number | null; fastest: boolean }[];
 	ideal: number | null;
 	speed: { value: number | null; fastest: boolean };
 };
 
+const sameTime = (a: number, b: number) => Math.abs(a - b) < 0.0005;
+
 /**
- * best lap of every driver, over the whole session or on one compound from the laps seen
+ * lap times taken away by race control for every car, they still count as the best lap of a stint
+ */
+export function getDeletedTimes(messages: Message[] | undefined): Map<string, number[]> {
+	const deleted = new Map<string, number[]>();
+
+	for (const msg of messages ?? []) {
+		const match = msg.Message.match(/^CAR (\d+) .*TIME (\d+:\d{2}\.\d{3}) DELETED/);
+		const time = parseLapSeconds(match?.[2]);
+		if (match && time !== null) deleted.set(match[1], [...(deleted.get(match[1]) ?? []), time]);
+	}
+
+	return deleted;
+}
+
+/**
+ * best lap of every driver, over the whole session or on one compound
  */
 export function getBestLaps(
 	lines: Record<string, TimingDataDriver>,
@@ -198,27 +216,50 @@ export function getBestLaps(
 	practiceLaps: Record<string, PracticeLap[]>,
 	appData: Record<string, TimingAppDataDriver> | undefined,
 	compound: Stint["Compound"] | null,
+	deleted: Map<string, number[]>,
 ): BestLapRow[] {
 	const rows = Object.values(lines).map((driver): BestLapRow => {
 		const nr = driver.RacingNumber;
-		const stints = appData?.[nr]?.Stints ?? [];
-		const timed = (practiceLaps[nr] ?? []).filter(
-			(lap) =>
-				lap.kind !== "pit" && lap.lapTime !== null && (!compound || stints[lap.stint - 1]?.Compound === compound),
-		);
-		const fastestSeen = timed.reduce<PracticeLap | null>(
-			(fastest, lap) => (!fastest || lap.lapTime! < fastest.lapTime! ? lap : fastest),
+		const seen = practiceLaps[nr] ?? [];
+		const isDeleted = (time: number) => (deleted.get(nr) ?? []).some((other) => sameTime(other, time));
+
+		// every stint carries its best lap for the whole session, the laps seen on the page may miss it
+		const all = (appData?.[nr]?.Stints ?? []).map((stint, index) => {
+			const time = parseLapSeconds(stint.LapTime);
+			if (time === null || !isDeleted(time)) return { stint, time, lapNumber: stint.LapNumber, deleted: false };
+
+			// a deleted best is replaced by the best valid lap seen on the set
+			const valid = seen
+				.filter((lap) => lap.stint === index + 1 && lap.kind !== "pit" && !isDeleted(lap.lapTime!))
+				.sort((a, b) => a.lapTime! - b.lapTime!)[0];
+			return { stint, time: valid?.lapTime ?? null, lapNumber: valid?.lap, deleted: true };
+		});
+
+		const sessionBest = parseLapSeconds(driver.BestLapTime?.Value);
+		// a session best matching no stint was set on a stint whose best was deleted, on the one nearest its lap
+		if (sessionBest !== null && !all.some((entry) => entry.time !== null && sameTime(entry.time, sessionBest))) {
+			// the feed counts this lap one lower than the lap count and the stints
+			const bestLap = driver.BestLapTime?.Lap !== undefined ? driver.BestLapTime.Lap + 1 : undefined;
+			const owner = all
+				.filter((entry) => entry.deleted)
+				.sort(
+					(a, b) =>
+						Math.abs((a.stint.LapNumber ?? 0) - (bestLap ?? 0)) - Math.abs((b.stint.LapNumber ?? 0) - (bestLap ?? 0)),
+				)[0];
+			if (owner) Object.assign(owner, { time: sessionBest, lapNumber: bestLap });
+		}
+
+		const stints = all.filter((entry) => entry.time !== null && (!compound || entry.stint.Compound === compound));
+		const fastestStint = stints.reduce<(typeof stints)[number] | null>(
+			(fastest, entry) => (!fastest || entry.time! < fastest.time! ? entry : fastest),
 			null,
 		);
 
-		const sessionBest = parseLapSeconds(driver.BestLapTime?.Value);
-		const best = compound ? (fastestSeen?.lapTime ?? null) : sessionBest;
-		// the session best is matched to a lap seen when the time is the same
-		const lap = compound
-			? fastestSeen
-			: fastestSeen && sessionBest !== null && Math.abs(fastestSeen.lapTime! - sessionBest) < 0.0005
-				? fastestSeen
-				: null;
+		const best = compound ? (fastestStint?.time ?? null) : sessionBest;
+		// the session best leaves out deleted laps, a stint best may not
+		const stint = best !== null ? (stints.find((entry) => sameTime(entry.time!, best)) ?? null) : null;
+		// the lap itself gives the tyre age, when it was seen
+		const lap = seen.find((entry) => stint?.lapNumber !== undefined && entry.lap === stint.lapNumber) ?? null;
 
 		const driverStats = stats?.[nr];
 		const sectors = (driverStats?.BestSectors ?? []).slice(0, 3).map((sector) => ({
@@ -235,7 +276,7 @@ export function getBestLaps(
 			best,
 			gap: null,
 			lap,
-			stint: lap ? stints[lap.stint - 1] : undefined,
+			stint: stint?.stint,
 			sectors,
 			ideal,
 			speed: {
