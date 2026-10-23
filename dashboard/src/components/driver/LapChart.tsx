@@ -13,6 +13,8 @@ export type LapChartSeries = {
 	key: string;
 	label: string;
 	color: string;
+	// tells apart two lines of the same color
+	dashed?: boolean;
 	points: LapChartPoint[];
 };
 
@@ -26,6 +28,8 @@ type Props = {
 	// improvements glow along the line or are marked on the point
 	highlight?: "segments" | "markers";
 	tones?: { improved: string; best: string };
+	// what the horizontal axis counts, laps of the race by default
+	axis?: { tick: string; name: string };
 };
 
 // chart surface, used for the ring around markers
@@ -59,6 +63,7 @@ export default function LapChart({
 	zero = false,
 	highlight = "markers",
 	tones,
+	axis = { tick: "L", name: "Lap" },
 }: Props) {
 	const containerRef = useRef<HTMLDivElement | null>(null);
 	const [width, setWidth] = useState<number>(0);
@@ -156,7 +161,17 @@ export default function LapChart({
 				{series.length > 1 &&
 					series.map((line) => (
 						<span key={`legend.${line.key}`} className="flex items-center gap-1.5">
-							<span className="h-0.5 w-4 rounded-full" style={{ backgroundColor: line.color }} />
+							<span
+								className="h-0.5 w-4 rounded-full"
+								style={
+									line.dashed
+										? {
+												backgroundImage: `linear-gradient(90deg, ${line.color} 60%, transparent 60%)`,
+												backgroundSize: "6px 2px",
+											}
+										: { backgroundColor: line.color }
+								}
+							/>
 							{line.label}
 						</span>
 					))}
@@ -214,7 +229,8 @@ export default function LapChart({
 								textAnchor="middle"
 								className="fill-zinc-500 text-[10px] tabular-nums"
 							>
-								L{lap}
+								{axis.tick}
+								{lap}
 							</text>
 						))}
 
@@ -249,6 +265,7 @@ export default function LapChart({
 									fill="none"
 									stroke={line.color}
 									strokeWidth={2}
+									strokeDasharray={line.dashed ? "5 4" : undefined}
 									strokeLinejoin="round"
 									strokeLinecap="round"
 								/>
@@ -320,7 +337,9 @@ export default function LapChart({
 							chart.x(hoverLap) > width / 2 ? { right: width - chart.x(hoverLap) + 8 } : { left: chart.x(hoverLap) + 8 }
 						}
 					>
-						<p className="text-zinc-500">Lap {hoverLap}</p>
+						<p className="text-zinc-500">
+							{axis.name} {hoverLap}
+						</p>
 						{hovered.map(({ line, point }) => (
 							<p key={`tooltip.${line.key}`} className="flex items-center gap-1.5 whitespace-nowrap">
 								<span className="h-0.5 w-3 rounded-full" style={{ backgroundColor: line.color }} />

@@ -28,6 +28,10 @@ const liveTimingItems = [
 		name: "Vertical",
 	},
 	{
+		href: "/dashboard/practice",
+		name: "Practice",
+	},
+	{
 		href: "/dashboard/qualifying",
 		name: "Qualifying",
 	},
