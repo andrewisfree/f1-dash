@@ -2,6 +2,20 @@
 
 Storico degli interventi su deploy e infrastruttura di f1-dash. Voce più recente in alto.
 
+## 2026-10-23 — Proxmox allineato a `c21ae91`
+
+**Versione installata**: commit `c21ae91` (pagina pilota con stato gara e passo, storico giri col ritardo, mappa
+meteo), costruita da un `git worktree` pulito. Immagini `api` e `realtime` invariate.
+
+**Verifiche**
+- `/dashboard`, `/dashboard/practice`, `/dashboard/driver/16`, `/dashboard/weather`, `/api/laps` rispondono 200;
+  `NEXT_PUBLIC_LIVE_URL` = `http://192.168.188.161:4000`; registratore ripartito su `/data/laps.json`.
+
+**Carico alle 21:33**
+- Host: CPU ~0%, load 1,05 / 0,41 / 0,35, RAM 2433 su 3363 MB (154 MB liberi), swap 3,46 GB su 8 GB.
+- LXC 108: 182 MB su 4096 (web 73 MB, realtime 15 MB, api 7 MB), disco 4,8 GB liberi.
+- VM Home Assistant (103): in esecuzione, 3769 su 4096 MB, CPU 4%.
+
 ## 2026-10-23 — Registratore dei giri sul server
 
 **Obiettivo**: non perdere i giri (e le long run) quando la pagina viene aperta tardi o il feed si interrompe.
