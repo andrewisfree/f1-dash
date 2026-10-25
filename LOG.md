@@ -2,6 +2,13 @@
 
 Storico degli interventi su deploy e infrastruttura di f1-dash. Voce più recente in alto.
 
+## 2026-10-25 — Andamento del distacco sugli ultimi 5 giri dello stint
+
+**Versione installata**: commit `7cdb422`, dopo la gara. Colore del distacco, ritmo e "BATTLE in" usano i giri puliti
+degli ultimi 5 dello stint di entrambe le auto e la mediana delle pendenze (prima: 2-3 giri consecutivi).
+Sui giri della gara USA: andamento mostrato in 515 casi invece di 423, salti di 0,2 s/giro o più dal 29% al 22%,
+"BATTLE in" stabile come prima (sbaglia di 3+ giri in circa un terzo dei casi). Con 8 giri i salti scendono al 10%.
+
 ## 2026-10-25 — Dopo la gara: controllo del feed, niente Syncing, riavvii innocui
 
 **Versione installata**: commit `0b81b01` (web), dopo la fine della gara.
