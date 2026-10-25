@@ -85,6 +85,10 @@ del PC). Per questo `.env.local` è in `dashboard/.dockerignore`.
 Il server web registra da solo i giri della sessione (`dashboard/src/server/lapRecorder.ts`, avviato da
 `src/instrumentation.ts`) e li espone su `/api/laps`: la dashboard li unisce al suo storico, così long run e passo
 gara restano completi anche se la pagina viene aperta tardi. Su Proxmox registra solo se il 108 è acceso.
+Il realtime non rimanda lo stato iniziale ai client già collegati quando cambia sessione: il registratore apre una
+connessione nuova ogni 30 s per confrontare la chiave e, se è cambiata, si ricollega. La sessione finita resta in
+`laps-<chiave>.json` accanto al file corrente (`/api/laps?session=<chiave>`): prove e qualifiche vengono
+cancellate dopo 4 giorni, l'ultima gara resta fino a quella successiva.
 
 Lo storico degli interventi è in [LOG.md](LOG.md): aggiungere una voce a ogni modifica di deploy o infrastruttura.
 

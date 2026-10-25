@@ -1,5 +1,5 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
+import { mkdir, readdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 
 import type { State } from "@/types/state.type";
 
@@ -14,9 +14,17 @@ const TICK_MS = 1000;
 const RETRY_MS = 5000;
 // writes to disk are grouped, a lap ends every few seconds during a session
 const SAVE_MS = 10_000;
+// the realtime service does not tell connected clients that a new session started, a fresh connection is
+// opened this often to compare the session it starts with
+const SESSION_CHECK_MS = 30_000;
+// the laps of past sessions are kept next to the current file for a race weekend and a day more,
+// the last race until the next one
+const ARCHIVE_KEEP_MS = 4 * 24 * 3600 * 1000;
 
 export type RecordedLaps = {
 	sessionKey: number | null;
+	// Race, Qualifying, Practice, missing in files written before it was kept
+	type?: string;
 	laps: Record<string, LapSample[]>;
 };
 
@@ -40,6 +48,7 @@ class LapRecorder {
 	private dirty = false;
 	private url: string;
 	private file: string;
+	private feed: AbortController | null = null;
 
 	constructor(url: string, file: string) {
 		this.url = url;
@@ -55,8 +64,27 @@ class LapRecorder {
 
 		setInterval(() => this.record(), TICK_MS);
 		setInterval(() => this.save(), SAVE_MS);
+		setInterval(() => void this.checkSession(), SESSION_CHECK_MS);
 
+		void this.prune();
 		void this.connect();
+	}
+
+	/**
+	 * the laps of a past session, kept in its own file next to the current one
+	 */
+	async archived(sessionKey: number): Promise<RecordedLaps | null> {
+		if (sessionKey === this.data.sessionKey) return this.data;
+
+		try {
+			return JSON.parse(await readFile(this.archiveFile(sessionKey), "utf8")) as RecordedLaps;
+		} catch {
+			return null;
+		}
+	}
+
+	private archiveFile(sessionKey: number) {
+		return join(dirname(this.file), `laps-${sessionKey}.json`);
 	}
 
 	private async connect() {
@@ -73,8 +101,58 @@ class LapRecorder {
 		}
 	}
 
+	/**
+	 * reads the session a new connection starts with, the one kept open stays on the session it started with
+	 */
+	private async checkSession() {
+		const current = this.state?.SessionInfo?.Key;
+		if (!this.feed || current === undefined) return;
+
+		const controller = new AbortController();
+		const timeout = setTimeout(() => controller.abort(), SESSION_CHECK_MS / 2);
+
+		try {
+			const response = await fetch(`${this.url}/api/realtime`, {
+				headers: { Accept: "text/event-stream" },
+				signal: controller.signal,
+			});
+			if (!response.ok || !response.body) return;
+
+			const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+			let buffer = "";
+
+			while (!buffer.includes("\n\n")) {
+				const { done, value } = await reader.read();
+				if (done) return;
+				buffer += value.replace(/\r\n/g, "\n");
+			}
+
+			const block = buffer.slice(0, buffer.indexOf("\n\n")).split("\n");
+			if (!block.some((line) => line.replace(/ /g, "") === "event:initial")) return;
+
+			const data = block.filter((line) => line.startsWith("data:")).map((line) => line.slice(5).replace(/^ /, ""));
+			const key = (JSON.parse(data.join("\n")) as State).SessionInfo?.Key;
+
+			if (key !== undefined && key !== current) {
+				console.log(`lap recorder: session ${current} ended, ${key} started, reconnecting`);
+				this.feed.abort();
+			}
+		} catch {
+			// the next check tries again
+		} finally {
+			clearTimeout(timeout);
+			controller.abort();
+		}
+	}
+
 	private async listen() {
-		const response = await fetch(`${this.url}/api/realtime`, { headers: { Accept: "text/event-stream" } });
+		const feed = new AbortController();
+		this.feed = feed;
+
+		const response = await fetch(`${this.url}/api/realtime`, {
+			headers: { Accept: "text/event-stream" },
+			signal: feed.signal,
+		});
 		if (!response.ok || !response.body) throw new Error(`status ${response.status}`);
 
 		const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
@@ -122,8 +200,9 @@ class LapRecorder {
 
 		const sessionKey = state.SessionInfo.Key ?? null;
 		if (this.data.sessionKey !== sessionKey) {
+			void this.archive(this.data);
 			this.trackers.clear();
-			this.data = { sessionKey, laps: {} };
+			this.data = { sessionKey, type: state.SessionInfo.Type, laps: {} };
 			this.dirty = true;
 		}
 
@@ -187,6 +266,43 @@ class LapRecorder {
 		}
 	}
 
+	private async archive(data: RecordedLaps) {
+		if (data.sessionKey === null || Object.keys(data.laps).length === 0) return;
+
+		try {
+			await mkdir(dirname(this.file), { recursive: true });
+			await writeFile(this.archiveFile(data.sessionKey), JSON.stringify(data));
+		} catch (error) {
+			console.warn(`lap recorder: could not archive session ${data.sessionKey} (${(error as Error).message})`);
+		}
+
+		await this.prune();
+	}
+
+	private async prune() {
+		const dir = dirname(this.file);
+
+		try {
+			const archives = await Promise.all(
+				(await readdir(dir))
+					.filter((name) => /^laps-\d+\.json$/.test(name))
+					.map(async (name) => {
+						const path = join(dir, name);
+						const { type } = JSON.parse(await readFile(path, "utf8")) as RecordedLaps;
+						return { path, key: parseInt(name.slice(5)), race: type === "Race", at: (await stat(path)).mtimeMs };
+					}),
+			);
+			const lastRace = Math.max(...archives.filter((archive) => archive.race).map((archive) => archive.key));
+
+			for (const archive of archives) {
+				const expired = archive.race ? archive.key < lastRace : Date.now() - archive.at > ARCHIVE_KEEP_MS;
+				if (expired) await unlink(archive.path);
+			}
+		} catch {
+			// nothing archived yet
+		}
+	}
+
 	private async save() {
 		if (!this.dirty) return;
 		this.dirty = false;
@@ -213,4 +329,8 @@ export function startLapRecorder(url: string, file: string) {
 
 export function getRecordedLaps(): RecordedLaps | null {
 	return global.lapRecorder?.laps ?? null;
+}
+
+export async function getArchivedLaps(sessionKey: number): Promise<RecordedLaps | null> {
+	return (await global.lapRecorder?.archived(sessionKey)) ?? null;
 }
