@@ -2,6 +2,13 @@
 
 Storico degli interventi su deploy e infrastruttura di f1-dash. Voce più recente in alto.
 
+## 2026-10-25 — Fine weekend USA, 108 spento
+
+Registrazione della gara chiusa e copiata sul PC (`recordings/2026-usa-race.tsv`, 8,4 MB, non in git); container
+`f1-record` rimosso, `record.js` resta in `/opt/f1-recordings`. Sul volume `laps` restano la gara (`laps.json`,
+`11396`) e la qualifica (`laps-11392.json`). LXC 108 spento alle 23:35 via API (`vzshutdown`); host con 647 MB
+liberi dopo lo spegnimento. Alla riaccensione ripartono da soli stack e timer `f1-feed-watchdog`.
+
 ## 2026-10-25 — Andamento del distacco sugli ultimi 5 giri dello stint
 
 **Versione installata**: commit `7cdb422`, dopo la gara. Colore del distacco, ritmo e "BATTLE in" usano i giri puliti
