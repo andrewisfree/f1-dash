@@ -12,6 +12,8 @@ import type { LapSample } from "@/stores/useLapHistoryStore";
 const SETTLE_MS = 1500;
 const TICK_MS = 1000;
 const RETRY_MS = 5000;
+// a feed back within this has not missed a stop or a safety car worth losing the lap for
+const SHORT_OUTAGE_MS = 30_000;
 // writes to disk are grouped, a lap ends every few seconds during a session
 const SAVE_MS = 10_000;
 // the realtime service does not tell connected clients that a new session started, a fresh connection is
@@ -32,6 +34,8 @@ type Tracker = {
 	lastLap: number;
 	pending: { lap: number; at: number; clean: boolean } | null;
 	disturbed: boolean;
+	// the set the lap started on, a stop changes it
+	stint: number;
 };
 
 // safety car, red flag and virtual safety car
@@ -49,6 +53,7 @@ class LapRecorder {
 	private url: string;
 	private file: string;
 	private feed: AbortController | null = null;
+	private lostAt: number | null = null;
 
 	constructor(url: string, file: string) {
 		this.url = url;
@@ -95,8 +100,7 @@ class LapRecorder {
 				console.warn(`lap recorder: feed lost, retrying (${(error as Error).message})`);
 			}
 
-			// laps running while the feed was down were not seen from start to end
-			this.trackers.forEach((tracker) => (tracker.disturbed = true));
+			this.lostAt ??= Date.now();
 			await new Promise((resolve) => setTimeout(resolve, RETRY_MS));
 		}
 	}
@@ -189,6 +193,12 @@ class LapRecorder {
 		const { CarDataZ, PositionZ, ...message } = JSON.parse(data.join("\n"));
 		this.state = (event === "initial" ? message : merge(this.state ?? {}, message)) as State;
 
+		// laps running during a long outage were not seen from start to end, a short one only lost a few updates
+		if (event === "initial" && this.lostAt !== null) {
+			if (Date.now() - this.lostAt > SHORT_OUTAGE_MS) this.trackers.forEach((tracker) => (tracker.disturbed = true));
+			this.lostAt = null;
+		}
+
 		this.record();
 	}
 
@@ -217,10 +227,15 @@ class LapRecorder {
 			const lap = driver.NumberOfLaps;
 			if (typeof lap !== "number") continue;
 
+			const stint = state.TimingAppData?.Lines?.[nr]?.Stints?.length ?? 0;
 			const tracker = this.trackers.get(nr);
 			if (!tracker) {
-				// the lap in progress was not seen from its start
-				this.trackers.set(nr, { lastLap: lap, pending: null, disturbed: true });
+				// after a restart the lap in progress began right after the last one saved, if nothing changed since
+				// it is as good as one seen from its start
+				const saved = this.data.laps[nr]?.at(-1);
+				const continues = saved?.lap === lap && saved.stint === stint;
+				const quiet = !neutralized && !driver.InPit && !driver.PitOut;
+				this.trackers.set(nr, { lastLap: lap, pending: null, disturbed: !(continues && quiet), stint });
 				continue;
 			}
 
@@ -228,9 +243,10 @@ class LapRecorder {
 				// a larger jump means laps were missed
 				const seen = lap - tracker.lastLap === 1;
 
-				tracker.pending = seen ? { lap, at: now, clean: !tracker.disturbed } : null;
+				tracker.pending = seen ? { lap, at: now, clean: !tracker.disturbed && tracker.stint === stint } : null;
 				tracker.disturbed = !seen;
 				tracker.lastLap = lap;
+				tracker.stint = stint;
 			} else if (lap < tracker.lastLap) {
 				tracker.lastLap = lap;
 				tracker.pending = null;
