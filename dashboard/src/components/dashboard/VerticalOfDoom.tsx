@@ -334,13 +334,14 @@ export default function VerticalOfDoom() {
 		const result = new Map<string, number[]>();
 		if (!isRace) return result;
 
-		// a stop of either car moves the gap by a pit loss, only the laps both cars ran on their current tyres count
+		// a stop of either car moves the gap by a pit loss, only the laps both cars ran on their current tyres count;
+		// the gap at the line holds even on a lap not followed from its start, so laps need not be clean
 		const currentStint = (nr: string) => {
 			const samples = history[nr] ?? [];
 			const stint = liveStints.get(nr) || samples[samples.length - 1]?.stint;
 			return new Map(
 				samples
-					.filter((sample) => sample.clean && sample.gap !== null && sample.stint === stint)
+					.filter((sample) => sample.gap !== null && sample.stint === stint)
 					.map((sample) => [sample.lap, sample.gap as number]),
 			);
 		};
