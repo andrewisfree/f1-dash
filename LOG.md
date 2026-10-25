@@ -11,10 +11,10 @@ Storico degli interventi su deploy e infrastruttura di f1-dash. Voce più recent
 - `b9a3a66`: `recordings/record.js` si ricollega quando cambia la sessione (stesso problema del registratore dei giri)
   e accetta l'indirizzo del realtime come terzo argomento.
 
-**Registrazione**: container `f1-record` (immagine web, `--network host`, `--restart on-failure`) avviato alle 18:38,
-scrive `/opt/f1-recordings/2026-usa-race.tsv` per 420 minuti. Il container usa ancora l'immagine web precedente, che
-quindi non viene tolta da `docker image prune` finché non lo si rimuove: a fine registrazione `docker rm f1-record`
-e `docker image prune -f`.
+**Registrazione**: container `f1-record` (`--network host`, `--restart on-failure`) che scrive
+`/opt/f1-recordings/2026-usa-race.tsv` fino alle 01:28 circa. Avviato alle 18:38 con l'immagine web, che però
+teneva occupata la versione precedente a ogni aggiornamento; ricreato alle 18:48 su `node:22-alpine` (168 MB, non
+cambia con gli aggiornamenti), il file continua in coda. Immagine web vecchia tolta: ne resta una sola.
 
 **Verifiche**: `/dashboard`, `/dashboard/vertical` e `/api/laps` rispondono 200, il bundle servito contiene
 "BATTLE in", `NEXT_PUBLIC_LIVE_URL` = `http://192.168.188.161:4000`. Alle 18:42 il feed era fermo (solo lo stato
