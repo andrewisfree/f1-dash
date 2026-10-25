@@ -2,6 +2,12 @@
 
 Storico degli interventi su deploy e infrastruttura di f1-dash. Voce più recente in alto.
 
+## 2026-10-25 — Linee dello stint con pilota selezionato e per il leader
+
+**Versione installata**: commit `7e5ea6b`, alle 21:57 circa (giro ~32). Con un pilota di riferimento selezionato le
+righe mostrano la distanza da lui nello stint (prima la linea spariva); il leader mostra il vantaggio sul secondo.
+Provato in locale sul feed della gara via relay; `/api/laps` e registratore intatti dopo il riavvio.
+
 ## 2026-10-25 — Andamento dello stint nella riga della Vertical, durante la gara
 
 **Versione installata**: commit `2323d7c`, alle 21:47 circa (giro ~26 della gara USA).
