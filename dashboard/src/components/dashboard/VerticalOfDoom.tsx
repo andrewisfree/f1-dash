@@ -41,6 +41,8 @@ const CLUSTER_PX = 7;
 const CLUSTER_MIN = 3;
 // laps of the gap to the car ahead drawn next to it
 const SPARK_LAPS = 6;
+// laps of the stint drawn in the middle of the row on larger screens
+const STINT_SPARK_LAPS = 20;
 // track limits below this are not worth the room in the row
 const TRACK_LIMITS_SHOWN = 3;
 // the pit window band reaches at most this far from the rejoin point
@@ -94,12 +96,25 @@ function gapChip(trend: Trend | null): string {
 /**
  * a tiny line of the gap to the car ahead over the last laps, going down when catching
  */
-function Sparkline({ values, tone }: { values: number[]; tone: Trend["tone"] | undefined }) {
+function Sparkline({
+	values: stint,
+	tone,
+	wide = false,
+}: {
+	values: number[];
+	tone: Trend["tone"] | undefined;
+	// the stint in the middle of the row, with the battle line, where there is room for it
+	wide?: boolean;
+}) {
+	const values = wide ? stint : stint.slice(-SPARK_LAPS);
 	if (values.length < 2) return null;
 
-	const width = 36;
-	const height = 10;
-	const min = Math.min(...values);
+	const width = wide ? 160 : 36;
+	const height = wide ? 18 : 10;
+	const min = Math.min(
+		...values,
+		...(wide && values.some((value) => value < BATTLE_SECONDS * 2) ? [BATTLE_SECONDS] : []),
+	);
 	const max = Math.max(...values);
 	const range = Math.max(max - min, 0.05);
 	const line = values
@@ -110,19 +125,52 @@ function Sparkline({ values, tone }: { values: number[]; tone: Trend["tone"] | u
 		})
 		.join(" ");
 
+	const battleY = height - ((BATTLE_SECONDS - min) / range) * height;
+	const last = line.split(" ").pop()!.split(",");
+
 	return (
-		<svg width={width} height={height} className="inline-block overflow-visible align-middle">
+		<svg
+			width={wide ? undefined : width}
+			height={height}
+			viewBox={`0 0 ${width} ${height}`}
+			preserveAspectRatio="none"
+			className={clsx("overflow-visible align-middle", wide ? "block w-full" : "inline-block")}
+		>
+			{wide && battleY >= 0 && battleY <= height && (
+				<line
+					x1={0}
+					x2={width}
+					y1={battleY}
+					y2={battleY}
+					strokeDasharray="3 3"
+					vectorEffect="non-scaling-stroke"
+					className="stroke-amber-400/50"
+				/>
+			)}
 			<polyline
 				points={line}
 				fill="none"
 				strokeWidth={1.5}
 				strokeLinejoin="round"
+				vectorEffect="non-scaling-stroke"
 				className={clsx({
 					"stroke-emerald-400": tone === "closing",
 					"stroke-red-400": tone === "opening",
 					"stroke-zinc-500": tone !== "closing" && tone !== "opening",
 				})}
 			/>
+			{wide && (
+				<circle
+					cx={last[0]}
+					cy={last[1]}
+					r={2}
+					className={clsx({
+						"fill-emerald-400": tone === "closing",
+						"fill-red-400": tone === "opening",
+						"fill-zinc-500": tone !== "closing" && tone !== "opening",
+					})}
+				/>
+			)}
 		</svg>
 	);
 }
@@ -261,7 +309,7 @@ export default function VerticalOfDoom() {
 		return result;
 	}, [history, isRace, lapsRemaining, neutralized, points, reference]);
 
-	// the gap to the car ahead now, lap by lap, for the sparklines
+	// the gap to the car ahead in the current stint, lap by lap, for the sparklines
 	const intervalHistory = useMemo(() => {
 		const result = new Map<string, number[]>();
 		if (!isRace) return result;
@@ -270,10 +318,18 @@ export default function VerticalOfDoom() {
 			const ahead = points[index - 1];
 			if (!ahead) return;
 
-			const aheadByLap = new Map((history[ahead.driver.RacingNumber] ?? []).map((sample) => [sample.lap, sample]));
+			const aheadSamples = history[ahead.driver.RacingNumber] ?? [];
+			const aheadStint = aheadSamples[aheadSamples.length - 1]?.stint;
+			// a stop of the car ahead moves its gap by a pit loss, only the laps both cars ran on their current tyres count
+			const aheadByLap = new Map(
+				aheadSamples
+					.filter((sample) => sample.clean && sample.gap !== null && sample.stint === aheadStint)
+					.map((sample) => [sample.lap, sample]),
+			);
 			const values = (history[point.driver.RacingNumber] ?? [])
-				.filter((sample) => sample.clean && sample.gap !== null && aheadByLap.get(sample.lap)?.gap != null)
-				.slice(-SPARK_LAPS)
+				.filter((sample) => sample.clean && sample.gap !== null && aheadByLap.has(sample.lap))
+				.filter((sample, _, all) => sample.stint === all[all.length - 1].stint)
+				.slice(-STINT_SPARK_LAPS)
 				.map((sample) => sample.gap! - aheadByLap.get(sample.lap)!.gap!);
 			result.set(point.driver.RacingNumber, values);
 		});
@@ -852,8 +908,16 @@ function DriverRow({
 					{battleTone && <span className="ml-1 text-[10px] font-black">DRS</span>}
 				</div>
 				{(spark.length > 1 || (trend && trend.tone !== "stable")) && (
-					<div className="flex items-center justify-end gap-1">
-						<Sparkline values={spark} tone={trend?.tone} />
+					<div
+						className={clsx(
+							"flex items-center justify-end gap-1",
+							// on larger screens the line is in the middle of the row, nothing else may be left here
+							(!trend || trend.tone === "stable") && "md:hidden",
+						)}
+					>
+						<span className="md:hidden">
+							<Sparkline values={spark} tone={trend?.tone} />
+						</span>
 						{/* the gap colour already says it is closing, the laps to the fight say more */}
 						{!battleTone && drsLaps !== null ? (
 							<span
@@ -885,6 +949,12 @@ function DriverRow({
 					<Badge className="border-amber-500 text-amber-400">TL{flags.trackLimits}</Badge>
 				)}
 				{driver.Cutoff && <span className="truncate text-xs text-zinc-500">Cutoff</span>}
+
+				{spark.length > 1 && (
+					<div className="hidden max-w-56 min-w-16 flex-1 px-1 md:block" title="gap to the car ahead in this stint">
+						<Sparkline values={spark} tone={trend?.tone} wide />
+					</div>
+				)}
 
 				<div className="ml-auto hidden items-center gap-1 md:flex">
 					{driver.Sectors.slice(0, 3).map((sector, index) => (
