@@ -2,6 +2,27 @@
 
 Storico degli interventi su deploy e infrastruttura di f1-dash. Voce più recente in alto.
 
+## 2026-10-25 — Andamento dello stint nella riga della Vertical, durante la gara
+
+**Versione installata**: commit `2323d7c`, alle 21:47 circa (giro ~26 della gara USA).
+- Su schermi medi e grandi il distacco da chi sta davanti è disegnato al centro della riga per tutto lo stint
+  (fino a 20 giri), con una linea tratteggiata a 1 s e un punto sull'ultimo giro; sul telefono resta la linea
+  piccola sotto il distacco.
+- Contano solo i giri in cui anche l'auto davanti è nello stint attuale: prima la sosta di chi sta davanti metteva
+  un gradino nella linea (visto dal vivo su HAD, ANT, LAW).
+
+**Prova dal vivo**: il pannello del browser non raggiunge la porta 4000; un relay sul PC (`localhost:4555`) ha
+servito l'immagine nuova in locale con il feed e i giri di Proxmox. Linee continue, nessuno scorrimento a 375 px.
+Il "+5s" di RUS sparisce correttamente con "PENALTY SERVED" (giro 24).
+
+**Verifiche**: `/api/laps` risponde con la gara (`11396`), il registratore ha ritrovato i giri dopo il riavvio, il
+bundle contiene il nuovo grafico; la registrazione continua (4,7 MB alle 21:47).
+
+## 2026-10-25 — Gara: cambio di sessione visto dal vivo
+
+Alle 20:07 il registratore dei giri e `f1-record` sono passati da soli dalla qualifica (`11392`) alla gara (`11396`);
+la qualifica è in `laps-11392.json`. Al giro 12 la Vertical aperta da zero mostrava già storico e andamenti.
+
 ## 2026-10-25 — "BATTLE in NL" sulla Vertical, registrazione della gara sul server
 
 **Versione installata**: commit `2b02742`, alle 18:42 (ora locale), prima della gara USA.
