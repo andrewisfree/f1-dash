@@ -309,33 +309,42 @@ export default function VerticalOfDoom() {
 		return result;
 	}, [history, isRace, lapsRemaining, neutralized, points, reference]);
 
-	// the gap to the car ahead in the current stint, lap by lap, for the sparklines
+	// the gap to the car ahead in the current stint, lap by lap, for the sparklines, the lead for the leader,
+	// to the reference driver when one is selected
 	const intervalHistory = useMemo(() => {
 		const result = new Map<string, number[]>();
 		if (!isRace) return result;
 
-		points.forEach((point, index) => {
-			const ahead = points[index - 1];
-			if (!ahead) return;
-
-			const aheadSamples = history[ahead.driver.RacingNumber] ?? [];
-			const aheadStint = aheadSamples[aheadSamples.length - 1]?.stint;
-			// a stop of the car ahead moves its gap by a pit loss, only the laps both cars ran on their current tyres count
-			const aheadByLap = new Map(
-				aheadSamples
-					.filter((sample) => sample.clean && sample.gap !== null && sample.stint === aheadStint)
-					.map((sample) => [sample.lap, sample]),
+		// a stop of either car moves the gap by a pit loss, only the laps both cars ran on their current tyres count
+		const currentStint = (nr: string) => {
+			const samples = history[nr] ?? [];
+			const stint = samples[samples.length - 1]?.stint;
+			return new Map(
+				samples
+					.filter((sample) => sample.clean && sample.gap !== null && sample.stint === stint)
+					.map((sample) => [sample.lap, sample.gap as number]),
 			);
-			const values = (history[point.driver.RacingNumber] ?? [])
-				.filter((sample) => sample.clean && sample.gap !== null && aheadByLap.has(sample.lap))
-				.filter((sample, _, all) => sample.stint === all[all.length - 1].stint)
+		};
+		// the distance between the two cars, going down when they get closer whichever is ahead
+		const between = (nr: string, other: string) => {
+			const mine = currentStint(nr);
+			const theirs = currentStint(other);
+			return Array.from(mine.entries())
+				.filter(([lap]) => theirs.has(lap))
 				.slice(-STINT_SPARK_LAPS)
-				.map((sample) => sample.gap! - aheadByLap.get(sample.lap)!.gap!);
-			result.set(point.driver.RacingNumber, values);
+				.map(([lap, gap]) => Math.abs(gap - (theirs.get(lap) as number)));
+		};
+
+		points.forEach((point, index) => {
+			const nr = point.driver.RacingNumber;
+			// the leader has nobody ahead, its line is the lead over the second
+			const other =
+				reference && reference !== nr ? reference : (points[index - 1] ?? points[index + 1])?.driver.RacingNumber;
+			if (other) result.set(nr, between(nr, other));
 		});
 
 		return result;
-	}, [history, isRace, points]);
+	}, [history, isRace, points, reference]);
 
 	// cars bunched on the axis become one pill, their dots would sit on top of each other
 	const clusters = useMemo(() => {
@@ -760,7 +769,7 @@ export default function VerticalOfDoom() {
 									{renderRow(driver, gapLabel, (reference ? trend?.reference : trend?.interval) ?? null, {
 										onSelect: () => setSelected(nr === reference ? null : nr),
 										battle: close ? (trend?.interval ?? "close") : null,
-										spark: reference ? undefined : intervalHistory.get(nr),
+										spark: intervalHistory.get(nr),
 									})}
 								</div>
 							</div>
@@ -951,7 +960,10 @@ function DriverRow({
 				{driver.Cutoff && <span className="truncate text-xs text-zinc-500">Cutoff</span>}
 
 				{spark.length > 1 && (
-					<div className="hidden max-w-56 min-w-16 flex-1 px-1 md:block" title="gap to the car ahead in this stint">
+					<div
+						className="hidden max-w-56 min-w-16 flex-1 px-1 md:block"
+						title="gap in this stint, to the car ahead, to the selected driver or, for the leader, to the second"
+					>
 						<Sparkline values={spark} tone={trend?.tone} wide />
 					</div>
 				)}
