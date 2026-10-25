@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, type CSSProperties } from "react";
 import Image from "next/image";
 import clsx from "clsx";
+import { LayoutGroup, motion } from "motion/react";
 
 import type { Driver, Stint } from "@/types/state.type";
 
@@ -31,6 +32,7 @@ import { useQualifyingStore } from "@/stores/useQualifyingStore";
 import { useSettingsStore } from "@/stores/useSettingsStore";
 
 import { useNow } from "@/hooks/useNow";
+import { useQualifyingEvents, type QualifyingEvent, type QualifyingEventKind } from "@/hooks/useQualifyingEvents";
 
 import Badge from "@/components/driver/Badge";
 import PushLaps from "@/components/qualifying/PushLaps";
@@ -47,11 +49,19 @@ const PHASE_LABEL: Record<LapPhase, string> = {
 	stopped: "STOP",
 };
 
+const FLASH: Record<QualifyingEventKind, string> = {
+	pole: "rgb(139 92 246 / 0.55)",
+	improved: "rgb(16 185 129 / 0.45)",
+	dropped: "rgb(239 68 68 / 0.35)",
+	deleted: "rgb(245 158 11 / 0.45)",
+};
+
 export default function QualifyingBoard() {
 	const state = useDataStore((store) => store.state);
 	const delay = useSettingsStore((store) => store.delay);
 	const outLaps = useQualifyingStore((store) => store.outLaps);
 	const now = useNow(1000);
+	const events = useQualifyingEvents();
 
 	const board = useMemo(() => buildBoard(state?.TimingData), [state?.TimingData]);
 	// drivers still running only show the laps deleted in this part
@@ -113,6 +123,7 @@ export default function QualifyingBoard() {
 			<BoardLine
 				key={`row.${nr}`}
 				row={row}
+				event={events.get(nr)}
 				meta={drivers[nr]}
 				stint={stints[stints.length - 1]}
 				phase={getLapPhase(row.driver, getBestSectors(state.TimingStats, nr))}
@@ -188,25 +199,32 @@ export default function QualifyingBoard() {
 
 			<div className="rounded-lg border border-zinc-800 p-2">
 				<div className="flex flex-col gap-0.5">
-					{advancing.map(renderRow)}
+					<LayoutGroup>
+						{advancing.map(renderRow)}
 
-					{board.cutoff && dropping.length > 0 && (
-						<div className="my-1 flex items-center gap-2 text-[10px] font-black text-red-400">
-							<span className="h-px flex-1 bg-red-500/70" />
-							ELIMINATION LINE
-							<span className="h-px flex-1 bg-red-500/70" />
-						</div>
-					)}
+						{board.cutoff && dropping.length > 0 && (
+							<motion.div
+								layout="position"
+								className="my-1 flex items-center gap-2 text-[10px] font-black text-red-400"
+							>
+								<span className="h-px flex-1 bg-red-500/70" />
+								ELIMINATION LINE
+								<span className="h-px flex-1 bg-red-500/70" />
+							</motion.div>
+						)}
 
-					{dropping.map(renderRow)}
+						{dropping.map(renderRow)}
 
-					{eliminated.length > 0 && <p className="mt-3 mb-1 px-1 text-xs text-zinc-500">Eliminated</p>}
-					{eliminated.map(renderRow)}
+						{eliminated.length > 0 && <p className="mt-3 mb-1 px-1 text-xs text-zinc-500">Eliminated</p>}
+						{eliminated.map(renderRow)}
+					</LayoutGroup>
 				</div>
 
 				<p className="mt-2 px-1 text-xs text-zinc-600">
 					Margin is the time to the elimination line. Sectors of the lap in progress: purple best of the session, green
-					personal best, yellow slower. An arrow up and a green edge mark a driver on course to improve.
+					personal best, yellow slower. An arrow up and a green edge mark a driver on course to improve. A new time
+					lights the row green, purple for pole, with the places won; the cars it passed light up red, a deleted lap
+					amber.
 				</p>
 			</div>
 
@@ -253,6 +271,8 @@ export default function QualifyingBoard() {
 
 type BoardLineProps = {
 	row: BoardRow;
+	// a new time or a lost place, for a few seconds
+	event: QualifyingEvent | undefined;
 	meta: Driver | undefined;
 	stint: Stint | undefined;
 	phase: LapPhase;
@@ -265,7 +285,7 @@ type BoardLineProps = {
 	prefix: string;
 };
 
-function BoardLine({ row, meta, stint, phase, push, deleted, final, eliminatedIn, prefix }: BoardLineProps) {
+function BoardLine({ row, event, meta, stint, phase, push, deleted, final, eliminatedIn, prefix }: BoardLineProps) {
 	const driver = row.driver;
 	const out = row.state === "eliminated";
 	const close = row.margin !== null && Math.abs(row.margin) < BUBBLE_SECONDS;
@@ -277,11 +297,14 @@ function BoardLine({ row, meta, stint, phase, push, deleted, final, eliminatedIn
 	const newTyre = stint?.New?.toLowerCase() === "true";
 
 	const value = final ? row.gapToFastest : row.margin;
+	const newTime = event?.kind === "pole" || event?.kind === "improved";
 
 	return (
-		<div
+		<motion.div
+			layout="position"
+			transition={{ layout: { duration: 0.6, ease: "easeOut" } }}
 			className={clsx(
-				"grid min-h-8 grid-cols-[1.25rem_3.5rem_4.25rem_3.5rem_minmax(0,1fr)_auto] items-center gap-1.5 rounded-md border px-2 py-0.5 text-sm sm:gap-3",
+				"relative isolate grid min-h-8 grid-cols-[1.25rem_3.5rem_4.25rem_3.5rem_minmax(0,1fr)_auto] items-center gap-1.5 rounded-md border px-2 py-0.5 text-sm sm:gap-3",
 				{
 					"border-zinc-800 bg-zinc-900/60": !close && !out,
 					"border-amber-500/60 bg-amber-950/20": close && !out,
@@ -291,6 +314,15 @@ function BoardLine({ row, meta, stint, phase, push, deleted, final, eliminatedIn
 				},
 			)}
 		>
+			{/* a new key restarts the flash, the row itself keeps its key so it can slide to its new place */}
+			{event && (
+				<span
+					key={`flash.${event.id}`}
+					className="animate-row-flash pointer-events-none absolute inset-0 -z-10 rounded-md"
+					style={{ "--flash": FLASH[event.kind] } as CSSProperties}
+				/>
+			)}
+
 			<span className="text-right text-xs text-zinc-500 tabular-nums">{row.position}</span>
 
 			<div className="flex items-center gap-1.5">
@@ -299,9 +331,26 @@ function BoardLine({ row, meta, stint, phase, push, deleted, final, eliminatedIn
 					style={{ backgroundColor: `#${meta?.TeamColour ?? "71717a"}` }}
 				/>
 				<span className="font-mono text-base leading-5 font-black">{meta?.Tla ?? driver.RacingNumber}</span>
+				{event && event.places !== 0 && (
+					<span
+						className={clsx(
+							"text-[10px] leading-none font-black tabular-nums",
+							event.places > 0 ? (event.kind === "pole" ? "text-violet-400" : "text-emerald-400") : "text-red-400",
+						)}
+					>
+						{event.places > 0 ? `▲${event.places}` : `▼${-event.places}`}
+					</span>
+				)}
 			</div>
 
-			<span className={clsx("text-right tabular-nums", row.seconds === null ? "text-zinc-600" : "text-zinc-200")}>
+			<span
+				className={clsx("text-right tabular-nums", {
+					"text-zinc-600": row.seconds === null,
+					"text-zinc-200": row.seconds !== null && !newTime,
+					"font-semibold text-violet-400": event?.kind === "pole",
+					"font-semibold text-emerald-400": event?.kind === "improved",
+				})}
+			>
 				{row.time || "no time"}
 			</span>
 
@@ -368,6 +417,6 @@ function BoardLine({ row, meta, stint, phase, push, deleted, final, eliminatedIn
 					{stint?.TotalLaps ?? 0}
 				</span>
 			</div>
-		</div>
+		</motion.div>
 	);
 }
