@@ -78,7 +78,10 @@ del PC). Per questo `.env.local` è in `dashboard/.dockerignore`.
 
 `recordings/` contiene gli strumenti per registrare e riprodurre una sessione reale (i file `.tsv` non sono in git):
 
-- `node recordings/record.js <file.tsv> <minuti>` registra `localhost:4000/api/realtime`, un evento per riga.
+- `node recordings/record.js <file.tsv> <minuti> [url]` registra `<url>/api/realtime` (default `localhost:4000`),
+  un evento per riga, e si ricollega quando cambia la sessione. Sul 108, senza dipendere dal PC:
+  `docker run -d --name f1-record --restart on-failure --network host -v /opt/f1-recordings:/rec --entrypoint node f1-dash-web-local /rec/record.js /rec/<file.tsv> <minuti>`
+  (copiare prima `record.js` in `/opt/f1-recordings`, poi `docker rm f1-record` a fine registrazione).
 - `node recordings/make-replay.js <file.tsv> <out.json> <da_secondi|-1> <durata_secondi>` estrae lo stato a un
   certo punto più gli eventi successivi, da riprodurre nel browser per provare le pagine senza una sessione live.
 

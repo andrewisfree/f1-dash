@@ -2,6 +2,24 @@
 
 Storico degli interventi su deploy e infrastruttura di f1-dash. Voce più recente in alto.
 
+## 2026-10-25 — "BATTLE in NL" sulla Vertical, registrazione della gara sul server
+
+**Versione installata**: commit `2b02742`, alle 18:42 (ora locale), prima della gara USA.
+- `2b02742`: sulla Vertical un'auto che recupera su quella davanti mostra "BATTLE in 3L", i giri che mancano per
+  arrivare sotto il secondo al ritmo attuale (il giro esatto nel tooltip). Non compare con un pilota di riferimento
+  selezionato. Provata nel pannello con una gara finta, anche a 375 px.
+- `b9a3a66`: `recordings/record.js` si ricollega quando cambia la sessione (stesso problema del registratore dei giri)
+  e accetta l'indirizzo del realtime come terzo argomento.
+
+**Registrazione**: container `f1-record` (immagine web, `--network host`, `--restart on-failure`) avviato alle 18:38,
+scrive `/opt/f1-recordings/2026-usa-race.tsv` per 420 minuti. Il container usa ancora l'immagine web precedente, che
+quindi non viene tolta da `docker image prune` finché non lo si rimuove: a fine registrazione `docker rm f1-record`
+e `docker image prune -f`.
+
+**Verifiche**: `/dashboard`, `/dashboard/vertical` e `/api/laps` rispondono 200, il bundle servito contiene
+"BATTLE in", `NEXT_PUBLIC_LIVE_URL` = `http://192.168.188.161:4000`. Alle 18:42 il feed era fermo (solo lo stato
+iniziale della qualifica): il passaggio alla gara non è ancora stato visto.
+
 ## 2026-10-25 — Registratore che segue il cambio di sessione, lampeggi in qualifica
 
 **Problema**: il realtime non rimanda lo stato iniziale ai client già collegati quando inizia una nuova sessione.
