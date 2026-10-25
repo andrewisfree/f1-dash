@@ -312,6 +312,22 @@ export default function VerticalOfDoom() {
 		return result;
 	}, [history, isRace, lapsRemaining, neutralized, points, reference]);
 
+	// the set every car is on now, from the tyre data: a lap ends well after a stop, the stint changes at once
+	const stintKey = Object.entries(state?.TimingAppData?.Lines ?? {})
+		.map(([nr, line]) => `${nr}:${line.Stints?.length ?? 0}`)
+		.join(",");
+	const liveStints = useMemo(
+		() =>
+			new Map(
+				stintKey
+					.split(",")
+					.filter(Boolean)
+					.map((entry) => entry.split(":"))
+					.map(([nr, stint]) => [nr, parseInt(stint)]),
+			),
+		[stintKey],
+	);
+
 	// the gap to the car ahead in the current stint, lap by lap, for the sparklines, the lead for the leader,
 	// to the reference driver when one is selected
 	const intervalHistory = useMemo(() => {
@@ -321,7 +337,7 @@ export default function VerticalOfDoom() {
 		// a stop of either car moves the gap by a pit loss, only the laps both cars ran on their current tyres count
 		const currentStint = (nr: string) => {
 			const samples = history[nr] ?? [];
-			const stint = samples[samples.length - 1]?.stint;
+			const stint = liveStints.get(nr) || samples[samples.length - 1]?.stint;
 			return new Map(
 				samples
 					.filter((sample) => sample.clean && sample.gap !== null && sample.stint === stint)
@@ -347,7 +363,7 @@ export default function VerticalOfDoom() {
 		});
 
 		return result;
-	}, [history, isRace, points, reference]);
+	}, [history, isRace, liveStints, points, reference]);
 
 	// cars bunched on the axis become one pill, their dots would sit on top of each other
 	const clusters = useMemo(() => {
@@ -392,7 +408,7 @@ export default function VerticalOfDoom() {
 
 		for (const driver of ordered) {
 			const samples = history[driver.RacingNumber] ?? [];
-			const stint = samples[samples.length - 1]?.stint;
+			const stint = liveStints.get(driver.RacingNumber) || samples[samples.length - 1]?.stint;
 			const times = samples
 				.filter(
 					(sample) =>
@@ -404,7 +420,7 @@ export default function VerticalOfDoom() {
 		}
 
 		return result;
-	}, [history, isRace, neutralized, ordered]);
+	}, [history, isRace, liveStints, neutralized, ordered]);
 
 	const cutoff = useMemo(() => {
 		if (isRace || !sessionPart) return null;
