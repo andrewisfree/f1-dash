@@ -97,38 +97,44 @@ export type GapTrend = {
 	laps: number;
 };
 
-const MAX_TREND_LAPS = 3;
+// the trend reads the last laps of the stint both cars are on: enough to ignore one lap in traffic,
+// few enough to notice tyres going off within a couple of laps
+const TREND_LAPS = 5;
 const MIN_TREND_LAPS = 2;
+// a trend whose newest lap is older than this, after a safety car or a long outage, says nothing about now
+const MAX_TREND_AGE = 2;
+
+const median = (values: number[]) => {
+	const sorted = [...values].sort((a, b) => a - b);
+	const middle = Math.floor(sorted.length / 2);
+	return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+};
 
 export function getGapTrend(behind: LapSample[] | undefined, ahead: LapSample[] | undefined): GapTrend | null {
 	if (!behind?.length || !ahead?.length) return null;
 
-	const aheadByLap = new Map(ahead.map((sample) => [sample.lap, sample]));
-	const delta = (sample: LapSample) => {
-		const other = aheadByLap.get(sample.lap);
-		return other && sample.gap !== null && other.gap !== null ? sample.gap - other.gap : null;
-	};
+	// laps after a stop of either car, undisturbed for both
+	const currentStint = (samples: LapSample[]) =>
+		samples.filter((sample) => sample.clean && sample.gap !== null && sample.stint === samples.at(-1)!.stint);
+	const aheadByLap = new Map(currentStint(ahead).map((sample) => [sample.lap, sample.gap as number]));
+	const points = currentStint(behind)
+		.filter((sample) => aheadByLap.has(sample.lap))
+		.map((sample) => ({ lap: sample.lap, delta: (sample.gap as number) - (aheadByLap.get(sample.lap) as number) }));
 
-	let lastIndex = behind.length - 1;
-	while (lastIndex >= 0 && delta(behind[lastIndex]) === null) lastIndex--;
-	if (lastIndex < 0) return null;
+	const lastLap = points.at(-1)?.lap;
+	if (lastLap === undefined || behind.at(-1)!.lap - lastLap > MAX_TREND_AGE) return null;
 
-	const last = behind[lastIndex];
-	const lastDelta = delta(last) as number;
+	const recent = points.filter((point) => lastLap - point.lap < TREND_LAPS);
+	const laps = lastLap - recent[0].lap;
+	if (laps < MIN_TREND_LAPS) return null;
 
-	let trend: GapTrend | null = null;
-
-	for (let i = lastIndex; i > 0 && last.lap - behind[i - 1].lap <= MAX_TREND_LAPS; i--) {
-		// laps after the base one must be undisturbed for both cars
-		if (!behind[i].clean || !aheadByLap.get(behind[i].lap)?.clean) break;
-		if (behind[i].lap - behind[i - 1].lap !== 1) break;
-
-		const baseDelta = delta(behind[i - 1]);
-		if (baseDelta === null) break;
-
-		const laps = last.lap - behind[i - 1].lap;
-		if (laps >= MIN_TREND_LAPS) trend = { rate: (lastDelta - baseDelta) / laps, laps };
+	// the median of the slopes between every two laps (Theil-Sen), one lap in traffic does not move it
+	const slopes: number[] = [];
+	for (let i = 0; i < recent.length; i++) {
+		for (let j = i + 1; j < recent.length; j++) {
+			slopes.push((recent[j].delta - recent[i].delta) / (recent[j].lap - recent[i].lap));
+		}
 	}
 
-	return trend;
+	return { rate: median(slopes), laps };
 }
