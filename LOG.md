@@ -2,6 +2,28 @@
 
 Storico degli interventi su deploy e infrastruttura di f1-dash. Voce più recente in alto.
 
+## 2026-10-25 — Registratore che segue il cambio di sessione, lampeggi in qualifica
+
+**Problema**: il realtime non rimanda lo stato iniziale ai client già collegati quando inizia una nuova sessione.
+Il registratore, collegato da venerdì, è rimasto sulla chiave della FP2 (`11390`) e ci ha scritto sopra i giri di
+FP3 e qualifica; la pagina li scartava perché la chiave non era quella della sessione in corso. I giri di FP2 e
+FP3 di questo weekend sono persi.
+
+**Versione installata**: commit `53f0ee8`, alle 17:57 (ora locale), prima della gara.
+- `53f0ee8`: ogni 30 s il registratore legge la chiave da una connessione nuova e si ricollega se è cambiata; la
+  sessione finita va in `/data/laps-<chiave>.json` (`/api/laps?session=<chiave>`). Prove e qualifiche restano
+  4 giorni, l'ultima gara fino alla successiva.
+- `752335d`: nella pagina Qualifying la riga di chi migliora lampeggia (verde, viola per la pole) con le posizioni
+  guadagnate, chi viene scavalcato lampeggia in rosso, un giro cancellato in ambra; le righe scorrono.
+
+**Intervento sul volume**: `laps.json` conteneva i giri della qualifica con la chiave `11390`; rietichettato a mano
+`11392` / `Qualifying` prima del riavvio.
+
+**Verifiche**: `/dashboard`, `/dashboard/qualifying`, `/dashboard/practice`, `/api/laps` e
+`/api/laps?session=11392` rispondono 200; `NEXT_PUBLIC_LIVE_URL` = `http://192.168.188.161:4000`; il registratore è
+ripartito sulla qualifica (`11392`). Il cambio verso la sessione della gara non è ancora stato visto dal vivo, solo con
+un realtime finto sul PC.
+
 ## 2026-10-24 — Tempi ai decimi nella pagina Practice
 
 **Versione installata**: commit `60fd47e`, da un `git worktree` pulito. `/dashboard/practice`, `/dashboard/pitwall`
