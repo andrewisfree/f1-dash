@@ -2,6 +2,15 @@
 
 Storico degli interventi su deploy e infrastruttura di f1-dash. Voce più recente in alto.
 
+## 2026-10-25 — Linee dello stint anche sui giri non seguiti dall'inizio; niente più installazioni in gara
+
+**Versione installata**: commit `7b39040`, alle 22:22 (giro ~47). La linea del distacco non richiede più giri
+"puliti", solo lo stesso stint: i riavvii avevano svuotato le linee di chi si era appena fermato (LEC, HAM).
+
+**Lezione**: ogni riavvio del web o del realtime segna non pulito il giro in corso di tutte le auto, e colori del
+distacco, andamenti e "BATTLE in" spariscono per circa 2 giri. Mai installare durante una gara finché il registratore
+non tratta come pulito il primo giro dopo un riavvio quando nulla è cambiato (stesso stint, fuori dai box, pista verde).
+
 ## 2026-10-25 — Feed bloccato durante la gara, linee che ripartono dopo la sosta
 
 **Blocco**: dalle 22:04:18 (giro ~36) il realtime non ha più ricevuto aggiornamenti da F1, senza errori nel log
