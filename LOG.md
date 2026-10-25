@@ -2,6 +2,18 @@
 
 Storico degli interventi su deploy e infrastruttura di f1-dash. Voce più recente in alto.
 
+## 2026-10-25 — Feed bloccato durante la gara, linee che ripartono dopo la sosta
+
+**Blocco**: dalle 22:04:18 (giro ~36) il realtime non ha più ricevuto aggiornamenti da F1, senza errori nel log
+(prima solo `broadcast stream error Lagged(n)`); container su, memoria a posto. Le connessioni restavano aperte con
+lo stato fermo. Risolto alle 22:14 con `docker compose restart realtime`: feed ripartito al giro 43, registratore dei
+giri e `f1-record` ricollegati da soli. Persi i giri 37-42 nel registratore e ~10 minuti nella registrazione.
+Il backend non si accorge da solo di un feed fermo: da rivedere.
+
+**Versione installata**: commit `e04dee7`, alle 22:17. Lo stint attuale della Vertical (linee e passo del pilota)
+viene dal numero di set del feed delle gomme e non più dall'ultimo giro registrato: dopo una sosta la linea riparte
+subito. Visto dal vivo su STR (terzo set nel feed, ultimo giro registrato ancora sul secondo).
+
 ## 2026-10-25 — Colore dell'ultimo giro sul passo del pilota
 
 **Versione installata**: commit `c7551ec`, alle 22:04 circa (giro ~39). L'ultimo giro sulla Vertical era confrontato
