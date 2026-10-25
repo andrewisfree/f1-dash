@@ -2,6 +2,13 @@
 
 Storico degli interventi su deploy e infrastruttura di f1-dash. Voce più recente in alto.
 
+## 2026-10-25 — Colore dell'ultimo giro sul passo del pilota
+
+**Versione installata**: commit `c7551ec`, alle 22:04 circa (giro ~39). L'ultimo giro sulla Vertical era confrontato
+con la mediana del gruppo, quindi la metà alta della classifica era sempre verde; ora è confrontato con la mediana
+degli ultimi 5 giri puliti dello stint del pilota (grigio finché non ce ne sono 3). Sul giro 36: 8 verdi, 3 neutri,
+5 tra giallo e rosso, 6 grigi appena usciti dai box. I colori dei giri sulle gomme erano già coerenti, invariati.
+
 ## 2026-10-25 — Linee dello stint con pilota selezionato e per il leader
 
 **Versione installata**: commit `7e5ea6b`, alle 21:57 circa (giro ~32). Con un pilota di riferimento selezionato le
