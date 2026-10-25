@@ -93,6 +93,15 @@ Il realtime non rimanda lo stato iniziale ai client già collegati quando cambia
 connessione nuova ogni 30 s per confrontare la chiave e, se è cambiata, si ricollega. La sessione finita resta in
 `laps-<chiave>.json` accanto al file corrente (`/api/laps?session=<chiave>`): prove e qualifiche vengono
 cancellate dopo 4 giorni, l'ultima gara resta fino a quella successiva.
+Dopo un riavvio il giro in corso resta "pulito" se riprende dall'ultimo salvato sullo stesso set, fuori dai box e
+con pista verde: un deploy non cancella più colori e andamenti. Resta comunque meglio non installare durante una gara.
+
+Lo stesso processo tiene gli ultimi 5 minuti del feed (`src/server/feedBacklog.ts`, `/api/backlog?seconds=N`): una
+pagina aperta con un ritardo li scarica prima del feed live e parte subito, senza "Syncing...".
+
+Sul 108 il timer systemd `f1-feed-watchdog.timer` lancia ogni minuto `/opt/f1-dash-v4/feed-watchdog.py` (sorgente in
+`deploy/`): se una sessione è in corso e in 20 s non arriva nessun aggiornamento riavvia `realtime` (al massimo ogni
+5 minuti). Log: `journalctl -u f1-feed-watchdog`. Prova: `python3 /opt/f1-dash-v4/feed-watchdog.py --dry-run`.
 
 Lo storico degli interventi è in [LOG.md](LOG.md): aggiungere una voce a ogni modifica di deploy o infrastruttura.
 

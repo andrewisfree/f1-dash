@@ -2,6 +2,23 @@
 
 Storico degli interventi su deploy e infrastruttura di f1-dash. Voce più recente in alto.
 
+## 2026-10-25 — Dopo la gara: controllo del feed, niente Syncing, riavvii innocui
+
+**Versione installata**: commit `0b81b01` (web), dopo la fine della gara.
+- `9d192ea` + `0b81b01`: timer systemd `f1-feed-watchdog.timer` sul 108 (sorgenti in `deploy/`, con fine riga Unix);
+  riavvia `realtime` se una sessione è in corso e il feed tace per 20 s. Provato con un feed finto fermo e uno vivo;
+  sul 108 a gara finita risponde "session Finished".
+- `da115c6`: il server tiene 5 minuti di feed (`/api/backlog`), la pagina con un ritardo parte subito.
+- `c63d305`: dopo un riavvio il giro in corso resta pulito se nulla è cambiato.
+
+**Prove** sulla registrazione della gara (`recordings/2026-usa-race.tsv`, copiata dal 108) riprodotta in tempo reale
+dal giro 19 contro l'immagine nuova in locale: con ritardo 30 s nessun "Syncing", pregresso in 10 ms, la pagina
+mostrava HAD a +11.656 (valore di 30 s prima, il feed era a +11.716); riavvio a metà giro: 35 giri puliti su 44
+negli ultimi due giri, i non puliti sono il primo giro visto e una sosta. Il feed USA non contiene telemetria
+(`CarDataZ`/`PositionZ` assenti).
+
+**Verifiche**: `/dashboard`, `/dashboard/vertical`, `/api/laps`, `/api/backlog?seconds=30` rispondono 200.
+
 ## 2026-10-25 — Linee dello stint anche sui giri non seguiti dall'inizio; niente più installazioni in gara
 
 **Versione installata**: commit `7b39040`, alle 22:22 (giro ~47). La linea del distacco non richiede più giri
