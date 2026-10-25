@@ -41,6 +41,9 @@ const CLUSTER_PX = 7;
 const CLUSTER_MIN = 3;
 // laps of the gap to the car ahead drawn next to it
 const SPARK_LAPS = 6;
+// clean laps of the stint the last lap is compared with, and the fewest that make a pace
+const OWN_PACE_LAPS = 5;
+const OWN_PACE_MIN_LAPS = 3;
 // laps of the stint drawn in the middle of the row on larger screens
 const STINT_SPARK_LAPS = 20;
 // track limits below this are not worth the room in the row
@@ -381,16 +384,27 @@ export default function VerticalOfDoom() {
 		return getPitWindow(entries, reference, pitLoss);
 	}, [isRace, pitLoss, points, reference]);
 
-	// the typical last lap of the cars running, to tell who is flying and who is struggling
-	const fieldLap = useMemo(() => {
-		if (!isRace || neutralized) return null;
+	// the pace of every driver in the stint before the last lap, to tell who is pushing and who is fading;
+	// the median leaves out a lap lost in traffic
+	const ownPace = useMemo(() => {
+		const result = new Map<string, number>();
+		if (!isRace || neutralized) return result;
 
-		const times = ordered
-			.filter((driver) => !driver.InPit && !driver.PitOut && !driver.Retired && !driver.Stopped)
-			.map((driver) => parseLapSeconds(driver.LastLapTime?.Value))
-			.filter((time): time is number => time !== null);
-		return times.length >= 5 ? median(times) : null;
-	}, [isRace, neutralized, ordered]);
+		for (const driver of ordered) {
+			const samples = history[driver.RacingNumber] ?? [];
+			const stint = samples[samples.length - 1]?.stint;
+			const times = samples
+				.filter(
+					(sample) =>
+						sample.clean && sample.lapTime !== null && sample.stint === stint && sample.lap < driver.NumberOfLaps,
+				)
+				.slice(-OWN_PACE_LAPS)
+				.map((sample) => sample.lapTime as number);
+			if (times.length >= OWN_PACE_MIN_LAPS) result.set(driver.RacingNumber, median(times));
+		}
+
+		return result;
+	}, [history, isRace, neutralized, ordered]);
 
 	const cutoff = useMemo(() => {
 		if (isRace || !sessionPart) return null;
@@ -444,7 +458,9 @@ export default function VerticalOfDoom() {
 				drsLap={drsLaps !== null && state.LapCount ? state.LapCount.CurrentLap + drsLaps : null}
 				spark={extra?.spark ?? []}
 				gained={isRace && Number.isFinite(grid) && Number.isFinite(position) ? grid - position : null}
-				lapDelta={fieldLap !== null && lastLap !== null && !driver.InPit && !driver.PitOut ? lastLap - fieldLap : null}
+				lapDelta={
+					ownPace.has(nr) && lastLap !== null && !driver.InPit && !driver.PitOut ? lastLap - ownPace.get(nr)! : null
+				}
 				driver={driver}
 				meta={drivers[nr]}
 				stint={appData?.Stints?.[appData.Stints.length - 1]}
@@ -807,7 +823,7 @@ type DriverRowProps = RowExtra & {
 	drsLap: number | null;
 	// places won since the start, null outside the race
 	gained: number | null;
-	// last lap against the typical last lap of the field, negative when faster
+	// last lap against the driver's own pace in the stint, negative when faster
 	lapDelta: number | null;
 	// gap to the car ahead over the last laps
 	spark: number[];
@@ -1000,7 +1016,7 @@ function DriverRow({
 									"text-zinc-500": !driver.LastLapTime.Value,
 								},
 				)}
-				title={lapDelta !== null ? `${formatSigned(lapDelta, 2)} on the typical lap of the field` : undefined}
+				title={lapDelta !== null ? `${formatSigned(lapDelta, 2)} on the own pace of the stint` : undefined}
 			>
 				{formatCompactLap(driver.LastLapTime.Value)}
 			</div>
