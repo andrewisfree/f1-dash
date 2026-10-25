@@ -367,12 +367,16 @@ export default function VerticalOfDoom() {
 		const grid = appData?.GridPos ? parseInt(appData.GridPos) : NaN;
 		const lastLap = parseLapSeconds(driver.LastLapTime?.Value);
 		const event = events.get(nr);
+		// against the reference driver the row shows that gap, not the one to the car ahead
+		const drsLaps = reference ? null : (trends.get(nr)?.interval?.drsLaps ?? null);
 
 		return (
 			<DriverRow
 				key={`row.${nr}.${event?.id ?? 0}`}
 				event={event}
 				battle={extra?.battle ?? null}
+				drsLaps={drsLaps}
+				drsLap={drsLaps !== null && state.LapCount ? state.LapCount.CurrentLap + drsLaps : null}
 				spark={extra?.spark ?? []}
 				gained={isRace && Number.isFinite(grid) && Number.isFinite(position) ? grid - position : null}
 				lapDelta={fieldLap !== null && lastLap !== null && !driver.InPit && !driver.PitOut ? lastLap - fieldLap : null}
@@ -733,6 +737,9 @@ type DriverRowProps = RowExtra & {
 	event: RaceEvent | undefined;
 	// the fight with the car ahead within a second, with its trend when known
 	battle: Trend | "close" | null;
+	// laps until the car is within DRS range of the car ahead at the current rate, and the lap it happens on
+	drsLaps: number | null;
+	drsLap: number | null;
 	// places won since the start, null outside the race
 	gained: number | null;
 	// last lap against the typical last lap of the field, negative when faster
@@ -755,6 +762,8 @@ type DriverRowProps = RowExtra & {
 function DriverRow({
 	event,
 	battle,
+	drsLaps,
+	drsLap,
 	gained,
 	lapDelta,
 	spark,
@@ -845,7 +854,17 @@ function DriverRow({
 				{(spark.length > 1 || (trend && trend.tone !== "stable")) && (
 					<div className="flex items-center justify-end gap-1">
 						<Sparkline values={spark} tone={trend?.tone} />
-						{trend && trend.tone !== "stable" && <TrendText trend={trend} className="text-[10px]" />}
+						{/* the gap colour already says it is closing, the laps to the fight say more */}
+						{!battleTone && drsLaps !== null ? (
+							<span
+								className="rounded border border-emerald-500/60 px-0.5 text-[10px] leading-tight font-black whitespace-nowrap text-emerald-300"
+								title={drsLap !== null ? `within a second around lap ${drsLap} at the current rate` : undefined}
+							>
+								BATTLE in {drsLaps}L
+							</span>
+						) : (
+							trend && trend.tone !== "stable" && <TrendText trend={trend} className="text-[10px]" />
+						)}
 					</div>
 				)}
 			</div>

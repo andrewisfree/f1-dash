@@ -7,6 +7,8 @@ import { getGapTrend, type LapSample } from "@/stores/useLapHistoryStore";
 // slower gap changes than this are shown as stable
 const MIN_TREND_RATE = 0.05;
 const MAX_CATCH_LAPS = 30;
+// within this the car behind can use DRS
+const DRS_SECONDS = 1;
 // laps averaged for the race pace
 export const PACE_LAPS = 3;
 
@@ -28,6 +30,8 @@ export type Trend = {
 	rate: number;
 	// laps until the gap is closed, null when opening or out of reach
 	catchLaps: number | null;
+	// laps until the car behind is within DRS range, null when already there, opening or out of reach
+	drsLaps: number | null;
 };
 
 export function describeTrend(
@@ -40,18 +44,21 @@ export function describeTrend(
 	if (!trend) return null;
 
 	if (Math.abs(trend.rate) < MIN_TREND_RATE)
-		return { text: "stable", tone: "stable", rate: trend.rate, catchLaps: null };
+		return { text: "stable", tone: "stable", rate: trend.rate, catchLaps: null, drsLaps: null };
 
 	const text = `${formatSigned(trend.rate, 2)}/L`;
-	if (trend.rate > 0) return { text, tone: "opening", rate: trend.rate, catchLaps: null };
+	if (trend.rate > 0) return { text, tone: "opening", rate: trend.rate, catchLaps: null, drsLaps: null };
 
+	const limit = Math.min(MAX_CATCH_LAPS, lapsRemaining ?? MAX_CATCH_LAPS);
 	const catchLaps = Math.ceil(interval / -trend.rate);
-	const reachable = catchLaps <= Math.min(MAX_CATCH_LAPS, lapsRemaining ?? MAX_CATCH_LAPS);
+	const reachable = catchLaps <= limit;
+	const drsLaps = interval >= DRS_SECONDS ? Math.max(1, Math.ceil((interval - DRS_SECONDS) / -trend.rate)) : null;
 	return {
 		text: reachable ? `${text} · ${catchLaps}L` : text,
 		tone: "closing",
 		rate: trend.rate,
 		catchLaps: reachable ? catchLaps : null,
+		drsLaps: drsLaps !== null && drsLaps <= limit ? drsLaps : null,
 	};
 }
 
