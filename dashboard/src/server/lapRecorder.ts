@@ -6,6 +6,8 @@ import type { State } from "@/types/state.type";
 import { computeGapsSeconds, getOrderedTimingDrivers, parseLapSeconds, parseLapsDown } from "@/lib/gaps";
 import { merge } from "@/lib/merge";
 
+import { getFeedBacklog } from "@/server/feedBacklog";
+
 import type { LapSample } from "@/stores/useLapHistoryStore";
 
 // gaps arrive slightly after the lap count, so wait before reading them
@@ -187,6 +189,9 @@ class LapRecorder {
 		}
 
 		if (data.length === 0 || (event !== "initial" && event !== "update")) return;
+
+		// the backlog keeps the whole feed, car data included, for the pages that start with a delay
+		getFeedBacklog().add(event, data.join("\n"));
 
 		// car data and positions are large and not needed for the laps
 		// eslint-disable-next-line @typescript-eslint/no-unused-vars

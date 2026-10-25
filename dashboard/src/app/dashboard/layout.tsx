@@ -28,10 +28,34 @@ type Props = {
 	children: ReactNode;
 };
 
+// the feed asked for beyond the delay, so a slightly larger delay set later does not have to wait either
+const BACKLOG_MARGIN_S = 30;
+const BACKLOG_MIN_S = 120;
+// past this the live feed opens without the backlog
+const BACKLOG_TIMEOUT_MS = 5000;
+
 export default function DashboardLayout({ children }: Props) {
 	const stores = useStores();
-	const { handleInitial, handleUpdate, maxDelay } = useDataEngine(stores);
-	const { connected } = useSocket({ handleInitial, handleUpdate });
+	const { handleInitial, handleUpdate, handleBacklog, maxDelay } = useDataEngine(stores);
+	const { connected } = useSocket({
+		handleInitial,
+		handleUpdate,
+		before: async () => {
+			// with a delay the page asks the server for the last minutes of the feed instead of waiting for them
+			const delay = useSettingsStore.getState().delay;
+			if (delay <= 0) return;
+
+			try {
+				const response = await fetch(`/api/backlog?seconds=${Math.max(delay + BACKLOG_MARGIN_S, BACKLOG_MIN_S)}`, {
+					cache: "no-store",
+					signal: AbortSignal.timeout(BACKLOG_TIMEOUT_MS),
+				});
+				if (response.ok) handleBacklog(await response.json());
+			} catch {
+				// the server may not follow the feed, the page fills its delay while open as before
+			}
+		},
+	});
 
 	const delay = useSettingsStore((state) => state.delay);
 	const syncing = delay > maxDelay;

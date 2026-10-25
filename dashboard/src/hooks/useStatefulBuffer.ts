@@ -15,8 +15,15 @@ export const useStatefulBuffer = <T>() => {
 		if (currentRef.current) buffer.push(currentRef.current);
 	};
 
+	// an update that arrived before the page opened, in the order it came
+	const pushTimed = (update: RecursivePartial<T>, timestamp: number) => {
+		currentRef.current = merge(currentRef.current ?? {}, update) as T;
+		if (currentRef.current) buffer.pushTimed(currentRef.current, timestamp);
+	};
+
 	return {
 		push,
+		pushTimed,
 		latest: buffer.latest,
 		delayed: buffer.delayed,
 		cleanup: buffer.cleanup,

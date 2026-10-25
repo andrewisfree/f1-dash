@@ -5,6 +5,8 @@ import { useEffect, useRef, useState } from "react";
 import type { CarData, CarsData, Position, Positions, State } from "@/types/state.type";
 import type { MessageInitial, MessageUpdate } from "@/types/message.type";
 
+import type { Backlog } from "@/server/feedBacklog";
+
 import { inflate } from "@/lib/inflate";
 import { utcToLocalMs } from "@/lib/utcToLocalMs";
 
@@ -105,6 +107,33 @@ export const useDataEngine = ({ updateState, updatePosition, updateCarData }: Pr
 		}
 	};
 
+	// the feed of the last minutes from the server, so a delay does not have to wait for it, before the live feed
+	const handleBacklog = ({ now, initialAt, initial, events }: Backlog) => {
+		// the server and the page clocks may differ a little
+		const offset = Date.now() - now;
+
+		const pushFrame = (message: Record<string, unknown>, timestamp: number) => {
+			Object.keys(buffers).forEach((key) => {
+				const data = message[key];
+				const buffer = buffers[key as keyof typeof buffers];
+				if (data) buffer.pushTimed(data as never, timestamp + offset);
+			});
+
+			const { CarDataZ: carZ, PositionZ: posZ } = message as MessageUpdate;
+			if (carZ) {
+				for (const entry of inflate<CarData>(carZ).Entries) carBuffer.pushTimed(entry.Cars, utcToLocalMs(entry.Utc));
+			}
+			if (posZ) {
+				for (const entry of inflate<Position>(posZ).Position) {
+					posBuffer.pushTimed(entry.Entries, utcToLocalMs(entry.Timestamp));
+				}
+			}
+		};
+
+		pushFrame(initial, initialAt);
+		for (const event of events) pushFrame(event.data, event.t);
+	};
+
 	const handleCurrentState = () => {
 		const delay = delayRef.current;
 
@@ -173,6 +202,7 @@ export const useDataEngine = ({ updateState, updatePosition, updateCarData }: Pr
 	return {
 		handleUpdate,
 		handleInitial,
+		handleBacklog,
 		maxDelay,
 	};
 };
