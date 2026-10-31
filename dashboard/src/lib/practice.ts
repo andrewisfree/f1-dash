@@ -343,8 +343,11 @@ export function getBestLaps(
 	return rows;
 }
 
-// practice times are read to the tenth, thousandths only add noise there
-export const PRACTICE_DIGITS = 1;
+// practice times are read to the tenth, thousandths only add noise there; the page also works in
+// qualifying and in the race, where thousandths decide positions
+export function practiceDigits(type: string | undefined) {
+	return type === "Practice" ? 1 : 3;
+}
 
 export function formatLapTime(seconds: number | null, digits = 3) {
 	if (seconds === null) return `-:--.${"-".repeat(digits)}`;

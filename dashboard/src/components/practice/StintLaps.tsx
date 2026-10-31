@@ -2,7 +2,7 @@ import clsx from "clsx";
 
 import type { Stint } from "@/types/state.type";
 
-import { formatLapTime, median, PRACTICE_DIGITS, type PracticeLap } from "@/lib/practice";
+import { formatLapTime, median, type PracticeLap } from "@/lib/practice";
 import { formatSigned } from "@/lib/race";
 import { heatChip, TONE_CHIP } from "@/lib/tones";
 
@@ -11,6 +11,7 @@ import TyreTag from "@/components/practice/TyreTag";
 type Props = {
 	laps: PracticeLap[];
 	stints: Stint[];
+	digits: number;
 };
 
 const timed = (lap: PracticeLap) => (lap.kind === "push" || lap.kind === "long") && !lap.outlier;
@@ -25,7 +26,7 @@ function reasonFor(lap: PracticeLap) {
 /**
  * every lap of a driver, set by set, the last set first, coloured against the typical lap on the set
  */
-export default function StintLaps({ laps, stints }: Props) {
+export default function StintLaps({ laps, stints, digits }: Props) {
 	const byStint = new Map<number, PracticeLap[]>();
 	for (const lap of laps) byStint.set(lap.stint, [...(byStint.get(lap.stint) ?? []), lap]);
 
@@ -58,16 +59,16 @@ export default function StintLaps({ laps, stints }: Props) {
 										"rounded px-1 py-0.5 tabular-nums",
 										reason !== null ? TONE_CHIP.excluded : lap.personalBest ? TONE_CHIP.gain : heatChip(delta),
 									)}
-									title={`Lap ${lap.lap}${lap.tyreAge !== null ? `, tyre lap ${lap.tyreAge}` : ""}${reason ? `, ${reason}` : delta !== null ? `, ${formatSigned(delta, PRACTICE_DIGITS)} on the typical lap of the set` : ""}`}
+									title={`Lap ${lap.lap}${lap.tyreAge !== null ? `, tyre lap ${lap.tyreAge}` : ""}${reason ? `, ${reason}` : delta !== null ? `, ${formatSigned(delta, digits)} on the typical lap of the set` : ""}`}
 								>
 									<span className="mr-1 text-[10px] opacity-60">{lap.lap}</span>
-									{lap.lapTime !== null ? formatLapTime(lap.lapTime, PRACTICE_DIGITS) : "-"}
+									{lap.lapTime !== null ? formatLapTime(lap.lapTime, digits) : "-"}
 								</span>
 							);
 						})}
 
 						{reference !== null && (
-							<span className="ml-1 text-zinc-500">typical {formatLapTime(reference, PRACTICE_DIGITS)}</span>
+							<span className="ml-1 text-zinc-500">typical {formatLapTime(reference, digits)}</span>
 						)}
 					</div>
 				);
