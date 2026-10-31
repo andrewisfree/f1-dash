@@ -18,6 +18,7 @@ import {
 	getOutLapMs,
 	getPartStart,
 	getPartTimes,
+	getMicroTiming,
 	getPushLap,
 	getRemainingMs,
 	type BoardRow,
@@ -60,6 +61,8 @@ export default function QualifyingBoard() {
 	const state = useDataStore((store) => store.state);
 	const delay = useSettingsStore((store) => store.delay);
 	const outLaps = useQualifyingStore((store) => store.outLaps);
+	const crossings = useQualifyingStore((store) => store.crossings);
+	const fractions = useQualifyingStore((store) => store.fractions);
 	const now = useNow(1000);
 	const events = useQualifyingEvents();
 
@@ -127,7 +130,12 @@ export default function QualifyingBoard() {
 				meta={drivers[nr]}
 				stint={stints[stints.length - 1]}
 				phase={getLapPhase(row.driver, getBestSectors(state.TimingStats, nr))}
-				push={getPushLap(row, getBestSectors(state.TimingStats, nr), board.rows)}
+				push={getPushLap(
+					row,
+					getBestSectors(state.TimingStats, nr),
+					board.rows,
+					getMicroTiming(crossings, fractions, nr),
+				)}
 				deleted={(row.state === "eliminated" ? deleted.session : deleted.part).get(nr) ?? 0}
 				final={!board.cutoff}
 				eliminatedIn={row.position > (noEntries[1] ?? Infinity) ? 1 : 2}

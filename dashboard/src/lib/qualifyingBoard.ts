@@ -3,6 +3,8 @@ import type { ExtrapolatedClock, Message, TimingData, TimingDataDriver, TimingSt
 import { getOrderedTimingDrivers, parseLapSeconds } from "@/lib/gaps";
 import { getCutoffPosition } from "@/lib/qualifying";
 
+import type { Crossings } from "@/stores/useQualifyingStore";
+
 // mini sector of a lap through the pit lane
 const SEGMENT_PIT = 2064;
 const SEGMENT_PERSONAL_BEST = 2049;
@@ -14,6 +16,8 @@ const PUSH_SECTOR_RATIO = 1.05;
 const PUSH_LAP_RATIO = 1.03;
 // mini sectors needed before their colors say something about the lap
 const MIN_SEGMENTS = 3;
+// sectors seen before the mini sectors say how a sector is spread, an even spread is worse than none
+const MIN_FRACTION_SAMPLES = 3;
 // margins to the elimination line below this are on the bubble
 export const BUBBLE_SECONDS = 0.15;
 // an out lap takes about this much longer than the fastest lap, used until one is measured
@@ -241,10 +245,67 @@ export type PushLap = {
 	position: number | null;
 };
 
+export type MicroTiming = Crossings & {
+	fractions: Record<string, number[][]>;
+};
+
+export function getMicroTiming(
+	crossings: Record<string, Crossings>,
+	fractions: Record<string, number[][]>,
+	nr: string,
+): MicroTiming | undefined {
+	return crossings[nr] ? { ...crossings[nr], fractions } : undefined;
+}
+
+function median(values: number[]) {
+	const sorted = [...values].sort((a, b) => a - b);
+	const middle = Math.floor(sorted.length / 2);
+	return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+}
+
 /**
- * the lap a driver is pushing on, or just finished, null when the driver is not on one
+ * how far into the sector in progress the car is, from the moment its last mini sector lit up:
+ * seconds since the sector started and the share of the sector a push lap has done by then
  */
-export function getPushLap(row: BoardRow, bestSectors: (number | null)[], rows: BoardRow[]): PushLap | null {
+function getSectorProgress(
+	driver: TimingDataDriver,
+	completed: boolean[],
+	timing: MicroTiming | undefined,
+): { sector: number; elapsed: number; fraction: number } | null {
+	const sector = completed.findIndex((done) => !done);
+	if (!timing || sector < 0 || sector > 2) return null;
+
+	const sizes = driver.Sectors.map((entry) => (entry.Segments ?? []).length);
+	const offset = sizes.slice(0, sector).reduce((sum, size) => sum + size, 0);
+	const size = sizes[sector];
+	if (timing.times.length !== sizes.reduce((sum, value) => sum + value, 0)) return null;
+
+	const start = sector === 0 ? timing.lapStart : timing.times[offset - 1];
+	const statuses = (driver.Sectors[sector].Segments ?? []).map((segment) => segment.Status);
+	let lit = statuses.length - 1;
+	while (lit >= 0 && statuses[lit] === 0) lit--;
+	// the last mini sector waits for the sector time, which is exact
+	if (start == null || lit < 0 || lit === size - 1) return null;
+
+	const at = timing.times[offset + lit];
+	if (at == null || at <= start) return null;
+
+	const samples = (timing.fractions[`${sector}/${size}`] ?? []).map((sample) => sample[lit]);
+	if (samples.length < MIN_FRACTION_SAMPLES) return null;
+
+	return { sector, elapsed: (at - start) / 1000, fraction: median(samples) };
+}
+
+/**
+ * the lap a driver is pushing on, or just finished, null when the driver is not on one; between
+ * the sector times the projection moves on with the mini sectors whose times were seen
+ */
+export function getPushLap(
+	row: BoardRow,
+	bestSectors: (number | null)[],
+	rows: BoardRow[],
+	timing?: MicroTiming,
+): PushLap | null {
 	const driver = row.driver;
 	if (row.state === "eliminated" || driver.InPit || driver.Stopped || driver.Retired) return null;
 
@@ -281,9 +342,20 @@ export function getPushLap(row: BoardRow, bestSectors: (number | null)[], rows: 
 		// the lap time arrives a moment after the last mini sector, until then there is nothing to show
 		const total = sectors.reduce((sum, sector) => sum + (sector.time ?? NaN), 0);
 		if (projected === null || !(Math.abs(total - projected) < 0.02)) return null;
-	} else if (sectors.some((sector) => sector.done)) {
-		const parts = sectors.map((sector, index) => sector.time ?? bestSectors[index] ?? null);
-		projected = parts.every((part) => part !== null) ? parts.reduce((sum, part) => sum + part, 0) : null;
+	} else {
+		const progress = getSectorProgress(driver, completed, timing);
+
+		if (progress || sectors.some((sector) => sector.done)) {
+			const parts = sectors.map((sector, index) => {
+				const best = bestSectors[index] ?? null;
+				if (sector.time !== null) return sector.time;
+				if (progress?.sector !== index || best === null) return best;
+				// the mini sectors light up a tenth or so late or early, early in the sector the time
+				// gained or lost is mostly that, so it counts as much as the share of the sector done
+				return best + (progress.elapsed - best * progress.fraction) * progress.fraction;
+			});
+			projected = parts.every((part) => part !== null) ? parts.reduce((sum, part) => sum + part, 0) : null;
+		}
 	}
 
 	// a finished lap is already in the standings

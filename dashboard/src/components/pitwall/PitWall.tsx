@@ -14,6 +14,7 @@ import {
 	formatClock,
 	getBestSectors,
 	getOutLapMs,
+	getMicroTiming,
 	getPushLap,
 	getRemainingMs,
 } from "@/lib/qualifyingBoard";
@@ -45,6 +46,8 @@ export default function PitWall() {
 	const setTeam = usePitWallStore((store) => store.setTeam);
 	const delay = useSettingsStore((store) => store.delay);
 	const outLaps = useQualifyingStore((store) => store.outLaps);
+	const crossings = useQualifyingStore((store) => store.crossings);
+	const fractions = useQualifyingStore((store) => store.fractions);
 	const now = useNow(1000);
 
 	const lines = state?.TimingData?.Lines;
@@ -225,7 +228,12 @@ export default function PitWall() {
 								row,
 								push:
 									mode === "qualifying" && row
-										? getPushLap(row, getBestSectors(state.TimingStats, car.nr), board.rows)
+										? getPushLap(
+												row,
+												getBestSectors(state.TimingStats, car.nr),
+												board.rows,
+												getMicroTiming(crossings, fractions, car.nr),
+											)
 										: null,
 								cutoff: board.cutoff,
 								lastCall,

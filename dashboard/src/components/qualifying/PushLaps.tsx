@@ -4,8 +4,17 @@ import clsx from "clsx";
 
 import type { State } from "@/types/state.type";
 
-import { getBestSectors, getPushLap, type Board, type BoardRow, type PushLap } from "@/lib/qualifyingBoard";
+import {
+	getBestSectors,
+	getMicroTiming,
+	getPushLap,
+	type Board,
+	type BoardRow,
+	type PushLap,
+} from "@/lib/qualifyingBoard";
 import { formatSigned } from "@/lib/race";
+
+import { useQualifyingStore } from "@/stores/useQualifyingStore";
 
 import Badge from "@/components/driver/Badge";
 
@@ -32,9 +41,18 @@ function segmentClass(status: number) {
  * the drivers on a push lap right now, with the lap time they are heading for
  */
 export default function PushLaps({ board, state }: Props) {
+	const crossings = useQualifyingStore((store) => store.crossings);
+	const fractions = useQualifyingStore((store) => store.fractions);
+
 	const laps = board.rows
 		.flatMap((row) => {
-			const lap = getPushLap(row, getBestSectors(state.TimingStats, row.driver.RacingNumber), board.rows);
+			const nr = row.driver.RacingNumber;
+			const lap = getPushLap(
+				row,
+				getBestSectors(state.TimingStats, nr),
+				board.rows,
+				getMicroTiming(crossings, fractions, nr),
+			);
 			return lap ? [{ row, lap }] : [];
 		})
 		.sort((a, b) => b.lap.progress - a.lap.progress);
@@ -158,9 +176,7 @@ function PushLine({ row, lap, board, state }: PushLineProps) {
 								})}
 							>
 								{info?.done && info.time !== null ? info.time.toFixed(3) : `S${index + 1}`}
-								{info?.loss != null && (
-									<span className="ml-1 font-normal opacity-70">{formatSigned(info.loss, 2)}</span>
-								)}
+								{info?.loss != null && <span className="ml-1 font-normal opacity-70">{formatSigned(info.loss)}</span>}
 							</p>
 						</div>
 					);
