@@ -2,6 +2,25 @@
 
 Storico degli interventi su deploy e infrastruttura di f1-dash. Voce più recente in alto.
 
+## 2026-11-01 — Proiezione del push sui microsettori
+
+Installata sul 108 la web a `ae11393` (sabato 31 ottobre, 23:35 UTC, dopo le qualifiche del Messico e prima della
+gara): millesimi nella pagina practice fuori dalle prove libere, tempo previsto e posizione del giro di push che
+seguono i microsettori. Ricreato solo `web`; `api`, `realtime` e `f1-record` non toccati. Controllo:
+`NEXT_PUBLIC_LIVE_URL` su `http://192.168.188.161:4000`, `/api/laps` risponde 200, registratore dei giri ripartito.
+Immagine vecchia rimossa con `docker image prune -f` (207 MB), disco 4,6 GB liberi.
+
+## 2026-10-30 — Weekend Messico, 108 acceso
+
+LXC 108 avviato via API alle 19:04 (prima: host 134 MB liberi, swap 2,8 GB). Stack `api`/`realtime`/`web` ripartito
+da solo, timer `f1-feed-watchdog` attivo, disco 4,6 GB liberi. `/dashboard` punta a `http://192.168.188.161:4000`,
+`/api/schedule/next` dà il GP del Messico (FP1 18:30 UTC). Dopo l'avvio: host 109 MB liberi, swap 3,3 GB, 108 a
+164 MB, VM Home Assistant in esecuzione.
+
+Registrazione del weekend avviata alle 18:10 UTC: container `f1-record` (`node:22-alpine`) su
+`/opt/f1-recordings/2026-mexico.tsv`, 3150 minuti (fino al 1° novembre ~22:40 UTC, dopo la gara). Stato iniziale
+scritto (93 KB); si ricollega da solo a ogni cambio di sessione.
+
 ## 2026-10-25 — Fine weekend USA, 108 spento
 
 Registrazione della gara chiusa e copiata sul PC (`recordings/2026-usa-race.tsv`, 8,4 MB, non in git); container
