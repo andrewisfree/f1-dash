@@ -2,6 +2,14 @@
 
 Storico degli interventi su deploy e infrastruttura di f1-dash. Voce più recente in alto.
 
+## 2026-11-01 — Novità della Vertical prima della gara del Messico
+
+Installata sul 108 la web a `2dd5c3b` alle 18:31 UTC, prima della gara (20:00 UTC): perdita ai box misurata,
+BOX=, giudizio STOP sulle soste, striscia degli ultimi eventi, undercut/overcut e gomme nelle battaglie, provati
+sulla gara di Austin rigiocata con `recordings/replay-server.js`. Ricreato solo `web`; `api`, `realtime` e
+`f1-record` non toccati. Controllo: `NEXT_PUBLIC_LIVE_URL` su `http://192.168.188.161:4000`, `/api/laps` e
+`/dashboard/vertical` rispondono 200, registratore dei giri ripartito, watchdog attivo, disco 4,6 GB liberi.
+
 ## 2026-11-01 — Controllo prima della gara del Messico
 
 Alle 17:31 UTC: stack, timer `f1-feed-watchdog` e registratore dei giri attivi, disco 4,6 GB liberi; host con
