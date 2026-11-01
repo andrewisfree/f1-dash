@@ -2,6 +2,19 @@
 
 Storico degli interventi su deploy e infrastruttura di f1-dash. Voce più recente in alto.
 
+## 2026-11-01 — Dopo la gara del Messico
+
+Alle 22:51 UTC `f1-record` fermato e rimosso, gara finita. Copiati sul PC `recordings/2026-mexico.tsv` (22 MB, tutto il
+weekend) e i giri della gara (`recordings/laps-mexico-race.json`). Misurata la perdita ai box sotto VSC (una sosta,
+10 s contro 24 s col verde): quota portata da 0,6 a 0,4. Sotto SC (tre soste in fondo al gruppo) il dato non basta,
+resta 0,5.
+
+Installata sul 108 la web a `4fe778b` alle 23:05 UTC: nella Vertical la linea del distacco diventa la variazione
+in secondi nello stint, undercut scritti per esteso; nella pagina pilota i giri divisi per set; nella pagina practice
+millesimi solo in qualifica. Provata prima sulla gara del Messico rigiocata. Ricreato solo `web`. Controllo:
+`NEXT_PUBLIC_LIVE_URL` su `http://192.168.188.161:4000`, `/dashboard/vertical`, `/dashboard/driver/44` e `/api/laps`
+rispondono 200, registratore dei giri ripartito. Immagine vecchia rimossa, disco 4,6 GB liberi.
+
 ## 2026-11-01 — Novità della Vertical prima della gara del Messico
 
 Installata sul 108 la web a `2dd5c3b` alle 18:31 UTC, prima della gara (20:00 UTC): perdita ai box misurata,
