@@ -5,10 +5,11 @@ import Image from "next/image";
 import Link from "next/link";
 import clsx from "clsx";
 
-import type { TimingDataDriver } from "@/types/state.type";
+import type { Stint, TimingDataDriver } from "@/types/state.type";
 
 import { computeGapsSeconds, getOrderedTimingDrivers, parseLapSeconds, parseLapsDown } from "@/lib/gaps";
-import { buildLapLog, getStintDegradation } from "@/lib/lapLog";
+import { buildLapLog, getStintDegradation, type LapLogRow } from "@/lib/lapLog";
+import { formatLapTime, practiceDigits } from "@/lib/practice";
 import {
 	describeStatus,
 	describeTrend,
@@ -45,6 +46,7 @@ import Badge from "@/components/driver/Badge";
 import DriverCarMetrics from "@/components/driver/DriverCarMetrics";
 import LapChart, { type LapChartPoint, type LapChartSeries } from "@/components/driver/LapChart";
 import TrendText from "@/components/driver/TrendText";
+import TyreTag from "@/components/practice/TyreTag";
 import Footer from "@/components/Footer";
 import { Card, Delta, Fact, GapBar, StintStrip, Tile, TyreWearBar } from "@/components/panel/Panel";
 
@@ -469,6 +471,17 @@ export default function DriverFocus({ nr: requested }: Props) {
 				)}
 			</div>
 
+			{logRows.length > 0 && (
+				<Card title="Laps by set, coloured against the typical lap on the set">
+					<StintLapStrips
+						rows={logRows}
+						stints={stints}
+						degradation={degradation}
+						digits={practiceDigits(state.SessionInfo?.Type)}
+					/>
+				</Card>
+			)}
+
 			<label className="flex flex-wrap items-center gap-2 rounded-lg border border-zinc-800 px-3 py-2 text-sm">
 				<span className="text-zinc-500">Compare with</span>
 				<select
@@ -729,6 +742,63 @@ export default function DriverFocus({ nr: requested }: Props) {
 			</div>
 
 			<Footer />
+		</div>
+	);
+}
+
+/**
+ * every lap of the driver as chips, set by set, the current set first, like the laps on the pit wall
+ */
+function StintLapStrips({
+	rows,
+	stints,
+	degradation,
+	digits,
+}: {
+	rows: LapLogRow[];
+	stints: Stint[];
+	degradation: (stint: number) => number | null;
+	digits: number;
+}) {
+	const byStint = new Map<number, LapLogRow[]>();
+	for (const row of rows) byStint.set(row.stint, [...(byStint.get(row.stint) ?? []), row]);
+	const groups = Array.from(byStint.entries()).sort((a, b) => b[0] - a[0]);
+
+	return (
+		<div className="flex flex-col gap-1.5">
+			{groups.map(([number, laps]) => {
+				const deg = degradation(number);
+
+				return (
+					<div key={`stint.${number}`} className="flex flex-wrap items-center gap-1 text-xs">
+						<span className="mr-1 flex w-24 shrink-0 items-center gap-1 text-zinc-500">
+							<TyreTag stint={stints[number - 1]} age={stints[number - 1]?.TotalLaps} />
+							{deg !== null && (
+								<span
+									className={clsx("font-semibold tabular-nums", TONE_TEXT[degradationTone(deg)])}
+									title="tyre loss per lap on this set, fuel burn added back"
+								>
+									{formatSigned(deg, 2)}
+								</span>
+							)}
+						</span>
+
+						{laps.map((row) => (
+							<span
+								key={`lap.${row.lap}`}
+								className={clsx(
+									"rounded px-1 py-0.5 tabular-nums",
+									row.reason !== null ? TONE_CHIP.excluded : row.personalBest ? TONE_CHIP.gain : heatChip(row.delta),
+								)}
+								title={`Lap ${row.lap}${row.reason ? `, ${row.reason}` : row.delta !== null ? `, ${formatSigned(row.delta, 2)} vs the set` : ""}`}
+							>
+								<span className="mr-1 text-[10px] opacity-60">{row.lap}</span>
+								{row.lapTime !== null ? formatLapTime(row.lapTime, digits) : "-"}
+							</span>
+						))}
+					</div>
+				);
+			})}
 		</div>
 	);
 }

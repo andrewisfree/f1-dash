@@ -343,10 +343,10 @@ export function getBestLaps(
 	return rows;
 }
 
-// practice times are read to the tenth, thousandths only add noise there; the page also works in
-// qualifying and in the race, where thousandths decide positions
+// lap times are read to the tenth in practice and in the race, thousandths only add noise there;
+// in qualifying, sprint shootout included, they decide positions
 export function practiceDigits(type: string | undefined) {
-	return type === "Practice" ? 1 : 3;
+	return type === "Qualifying" ? 3 : 1;
 }
 
 export function formatLapTime(seconds: number | null, digits = 3) {

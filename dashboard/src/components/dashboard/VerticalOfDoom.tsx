@@ -41,17 +41,17 @@ const BATTLE_SECONDS = 1;
 // dots on the axis closer than this are drawn as one group
 const CLUSTER_PX = 7;
 const CLUSTER_MIN = 3;
-// laps of the gap to the car ahead drawn next to it
-const SPARK_LAPS = 6;
 // clean laps of the stint the last lap is compared with, and the fewest that make a pace
 const OWN_PACE_LAPS = 5;
 const OWN_PACE_MIN_LAPS = 3;
-// laps of the stint drawn in the middle of the row on larger screens
-const STINT_SPARK_LAPS = 20;
+// a smaller change of the gap over the stint is shown as even
+const STINT_CHANGE_SECONDS = 0.3;
+// fewer laps together on the current sets say nothing yet
+const STINT_CHANGE_LAPS = 3;
 // track limits below this are not worth the room in the row
 const TRACK_LIMITS_SHOWN = 3;
 // laps after the in lap the last stop stays in the row, it is measured two clean laps after it
-const STOP_SHOWN_LAPS = 8;
+const STOP_SHOWN_LAPS = 6;
 // the pit window band reaches at most this far from the rejoin point
 const PIT_BAND_PX = 24;
 
@@ -101,85 +101,35 @@ function gapChip(trend: Trend | null): string {
 }
 
 /**
- * a tiny line of the gap to the car ahead over the last laps, going down when catching
+ * how much the gap changed since both cars are on their current sets, in seconds and the same on every row,
+ * negative when the two got closer
  */
-function Sparkline({
-	values: stint,
-	tone,
-	wide = false,
-}: {
-	values: number[];
-	tone: Trend["tone"] | undefined;
-	// the stint in the middle of the row, with the battle line, where there is room for it
-	wide?: boolean;
-}) {
-	const values = wide ? stint : stint.slice(-SPARK_LAPS);
-	if (values.length < 2) return null;
+function StintChange({ values }: { values: number[] }) {
+	if (values.length - 1 < STINT_CHANGE_LAPS) return null;
 
-	const width = wide ? 160 : 36;
-	const height = wide ? 18 : 10;
-	const min = Math.min(
-		...values,
-		...(wide && values.some((value) => value < BATTLE_SECONDS * 2) ? [BATTLE_SECONDS] : []),
-	);
-	const max = Math.max(...values);
-	const range = Math.max(max - min, 0.05);
-	const line = values
-		.map((value, index) => {
-			const x = (index / (values.length - 1)) * width;
-			const y = height - ((value - min) / range) * height;
-			return `${x.toFixed(1)},${y.toFixed(1)}`;
-		})
-		.join(" ");
-
-	const battleY = height - ((BATTLE_SECONDS - min) / range) * height;
-	const last = line.split(" ").pop()!.split(",");
+	const change = values[values.length - 1] - values[0];
+	const laps = values.length - 1;
+	const tone = Math.abs(change) < STINT_CHANGE_SECONDS ? "neutral" : change < 0 ? "closing" : "opening";
 
 	return (
-		<svg
-			width={wide ? undefined : width}
-			height={height}
-			viewBox={`0 0 ${width} ${height}`}
-			preserveAspectRatio="none"
-			className={clsx("overflow-visible align-middle", wide ? "block w-full" : "inline-block")}
+		<span
+			className={clsx("text-xs whitespace-nowrap tabular-nums", {
+				"text-emerald-400": tone === "closing",
+				"text-red-400": tone === "opening",
+				"text-zinc-500": tone === "neutral",
+			})}
 		>
-			{wide && battleY >= 0 && battleY <= height && (
-				<line
-					x1={0}
-					x2={width}
-					y1={battleY}
-					y2={battleY}
-					strokeDasharray="3 3"
-					vectorEffect="non-scaling-stroke"
-					className="stroke-amber-400/50"
-				/>
-			)}
-			<polyline
-				points={line}
-				fill="none"
-				strokeWidth={1.5}
-				strokeLinejoin="round"
-				vectorEffect="non-scaling-stroke"
-				className={clsx({
-					"stroke-emerald-400": tone === "closing",
-					"stroke-red-400": tone === "opening",
-					"stroke-zinc-500": tone !== "closing" && tone !== "opening",
-				})}
-			/>
-			{wide && (
-				<circle
-					cx={last[0]}
-					cy={last[1]}
-					r={2}
-					className={clsx({
-						"fill-emerald-400": tone === "closing",
-						"fill-red-400": tone === "opening",
-						"fill-zinc-500": tone !== "closing" && tone !== "opening",
-					})}
-				/>
-			)}
-		</svg>
+			{formatSigned(change, 1)}s in {laps}L
+		</span>
 	);
+}
+
+// the fight around the stops in plain words: once both stopped, what the stops were worth on the rival; before,
+// what the rival stopping now would be worth for the car that stopped, and stopping now for the one still out
+function undercutLabel(undercut: Undercut, tla: (nr: string) => string) {
+	const rival = tla(undercut.rival);
+	if (undercut.done) return `stops vs ${rival}`;
+	return undercut.role === "undercut" ? `if ${rival} pits` : `pit now vs ${rival}`;
 }
 
 function spreadLabels(points: Omit<DriverPoint, "labelY">[]): DriverPoint[] {
@@ -332,7 +282,7 @@ export default function VerticalOfDoom() {
 		[stintKey],
 	);
 
-	// the gap to the car ahead in the current stint, lap by lap, for the sparklines, the lead for the leader,
+	// the gap to the car ahead in the current stint, lap by lap, for its change over the stint, the lead for the leader,
 	// to the reference driver when one is selected
 	const intervalHistory = useMemo(() => {
 		const result = new Map<string, number[]>();
@@ -355,7 +305,6 @@ export default function VerticalOfDoom() {
 			const theirs = currentStint(other);
 			return Array.from(mine.entries())
 				.filter(([lap]) => theirs.has(lap))
-				.slice(-STINT_SPARK_LAPS)
 				.map(([lap, gap]) => Math.abs(gap - (theirs.get(lap) as number)));
 		};
 
@@ -957,7 +906,7 @@ type DriverRowProps = RowExtra & {
 	gained: number | null;
 	// last lap against the driver's own pace in the stint, negative when faster
 	lapDelta: number | null;
-	// gap to the car ahead over the last laps
+	// gap to the car ahead lap by lap in the current stint
 	spark: number[];
 	driver: TimingDataDriver;
 	meta: Driver | undefined;
@@ -1079,17 +1028,8 @@ function DriverRow({
 					{gapLabel}
 					{battleTone && <span className="ml-1 text-[10px] font-black">DRS</span>}
 				</div>
-				{(spark.length > 1 || (trend && trend.tone !== "stable")) && (
-					<div
-						className={clsx(
-							"flex items-center justify-end gap-1",
-							// on larger screens the line is in the middle of the row, nothing else may be left here
-							(!trend || trend.tone === "stable") && "md:hidden",
-						)}
-					>
-						<span className="md:hidden">
-							<Sparkline values={spark} tone={trend?.tone} />
-						</span>
+				{trend && trend.tone !== "stable" && (
+					<div className="flex items-center justify-end gap-1">
 						{/* the gap colour already says it is closing, the laps to the fight say more */}
 						{!battleTone && drsLaps !== null ? (
 							<span
@@ -1099,7 +1039,7 @@ function DriverRow({
 								BATTLE in {drsLaps}L
 							</span>
 						) : (
-							trend && trend.tone !== "stable" && <TrendText trend={trend} className="text-[10px]" />
+							<TrendText trend={trend} className="text-[10px]" />
 						)}
 					</div>
 				)}
@@ -1128,7 +1068,7 @@ function DriverRow({
 							undercut.done ? (undercut.gain >= 0 ? "bg-emerald-500/20" : "bg-red-500/20") : "border-dashed",
 						)}
 					>
-						{undercut.role === "undercut" ? "UC" : "OC"} {tla(undercut.rival)} {formatSigned(undercut.gain, 1)}
+						{undercutLabel(undercut, tla)} {formatSigned(undercut.gain, 1)}
 					</span>
 				)}
 				{tyres && (tyres.compounds || Math.abs(tyres.age) >= 3) && (
@@ -1166,10 +1106,10 @@ function DriverRow({
 
 				{spark.length > 1 && (
 					<div
-						className="hidden max-w-56 min-w-16 flex-1 px-1 md:block"
-						title="gap in this stint, to the car ahead, to the selected driver or, for the leader, to the second"
+						className="hidden flex-1 px-1 text-right md:block"
+						title="change of the gap since both cars are on their current sets, to the car ahead, to the selected driver or, for the leader, to the second"
 					>
-						<Sparkline values={spark} tone={trend?.tone} wide />
+						<StintChange values={spark} />
 					</div>
 				)}
 

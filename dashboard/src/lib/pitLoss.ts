@@ -9,8 +9,9 @@ const MIN_STOPS = 2;
 const MIN_LOSS = 10;
 const MAX_LOSS = 45;
 // the field runs slower under safety car and virtual safety car, a stop costs about this share of a green one;
-// not measured, a race has too few stops under neutralization
-const NEUTRALIZED_SHARE: Record<string, number> = { "4": 0.5, "6": 0.6, "7": 0.6 };
+// Mexico 2026: one stop under VSC lost 10s to the cars around it against 24s green; under SC three stops at the
+// back lost the cars that were 2-6s behind, the share is a guess there, the bunching makes it depend on the moment
+const NEUTRALIZED_SHARE: Record<string, number> = { "4": 0.5, "6": 0.4, "7": 0.4 };
 
 export type Stop = {
 	nr: string;
