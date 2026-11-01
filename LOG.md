@@ -2,6 +2,13 @@
 
 Storico degli interventi su deploy e infrastruttura di f1-dash. Voce più recente in alto.
 
+## 2026-11-01 — Controllo prima della gara del Messico
+
+Alle 17:31 UTC: stack, timer `f1-feed-watchdog` e registratore dei giri attivi, disco 4,6 GB liberi; host con
+118 MB liberi e 3,4 GB di swap (come negli altri weekend). La registrazione sarebbe finita alle 22:40 UTC, 40 minuti
+dopo la fine prevista della gara: `f1-record` rilanciato alle 17:32 UTC con 447 minuti (fino alle 01:00 UTC del
+2 novembre), stesso file `2026-mexico.tsv`, continuato in coda con un nuovo stato iniziale.
+
 ## 2026-11-01 — Proiezione del push sui microsettori
 
 Installata sul 108 la web a `ae11393` (sabato 31 ottobre, 23:35 UTC, dopo le qualifiche del Messico e prima della
