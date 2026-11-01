@@ -15,6 +15,7 @@ import {
 	type GapScale,
 } from "@/lib/gaps";
 import { getTrackStatusMessage } from "@/lib/getTrackStatusMessage";
+import { getPitLoss, measureStops, rateStops, type StopRating } from "@/lib/pitLoss";
 import { median } from "@/lib/practice";
 import { getCutoffPosition, inDangerZone } from "@/lib/qualifying";
 import { describeTrend, formatSigned, getPitWindow, isNeutralized, isOffLeadLap, type Trend } from "@/lib/race";
@@ -24,7 +25,7 @@ import { heatChip, TONE_CHIP, tyreWear } from "@/lib/tones";
 import { useDataStore } from "@/stores/useDataStore";
 import { useLapHistoryStore } from "@/stores/useLapHistoryStore";
 import { useSettingsStore } from "@/stores/useSettingsStore";
-import { useRaceEvents, type RaceEvent, type RaceEventKind } from "@/hooks/useRaceEvents";
+import { useRaceEvents, type RaceEvent, type RaceEventKind, type RaceLogEntry } from "@/hooks/useRaceEvents";
 import Badge from "@/components/driver/Badge";
 import TrendText from "@/components/driver/TrendText";
 import VerticalOptions from "@/components/dashboard/VerticalOptions";
@@ -48,6 +49,8 @@ const OWN_PACE_MIN_LAPS = 3;
 const STINT_SPARK_LAPS = 20;
 // track limits below this are not worth the room in the row
 const TRACK_LIMITS_SHOWN = 3;
+// laps after the in lap the last stop stays in the row, it is measured two clean laps after it
+const STOP_SHOWN_LAPS = 8;
 // the pit window band reaches at most this far from the rejoin point
 const PIT_BAND_PX = 24;
 
@@ -209,11 +212,11 @@ export default function VerticalOfDoom() {
 	const fixedSeconds = useSettingsStore((store) => store.verticalFixedSeconds);
 	const battleSeconds = useSettingsStore((store) => store.verticalBattleSeconds);
 	const showConnectors = useSettingsStore((store) => store.verticalConnectors);
-	const pitLoss = useSettingsStore((store) => store.verticalPitLoss);
+	const pitLossSetting = useSettingsStore((store) => store.verticalPitLoss);
 
 	const [selected, setSelected] = useState<string | null>(null);
 	const [showOptions, setShowOptions] = useState<boolean>(false);
-	const events = useRaceEvents();
+	const { events, log } = useRaceEvents();
 
 	const sessionPart = state?.TimingData?.SessionPart;
 	const noEntries = state?.TimingData?.NoEntries;
@@ -393,13 +396,35 @@ export default function VerticalOfDoom() {
 		return result;
 	}, [flags, isRace, points]);
 
+	// what a stop costs, measured on the stops of this race once there are a few, cheaper under neutralization
+	const stops = useMemo(() => (isRace ? measureStops(history) : []), [history, isRace]);
+	const stopRatings = useMemo(() => rateStops(stops), [stops]);
+	const pitLoss = useMemo(
+		() => getPitLoss(stops, pitLossSetting, state?.TrackStatus?.Status),
+		[stops, pitLossSetting, state?.TrackStatus?.Status],
+	);
+
 	// where the reference driver would rejoin after a pit stop
 	const pitWindow = useMemo(() => {
 		if (!reference || !isRace) return null;
 
 		const entries = points.map((point) => ({ nr: point.driver.RacingNumber, gap: point.gap }));
-		return getPitWindow(entries, reference, pitLoss);
+		return getPitWindow(entries, reference, pitLoss.loss);
 	}, [isRace, pitLoss, points, reference]);
+
+	// cars that could stop now and rejoin in the same place; with a red flag the tyres are changed for free
+	const freeStops = useMemo(() => {
+		const result = new Set<string>();
+		if (!isRace || state?.TrackStatus?.Status === "5") return result;
+
+		const entries = points.map((point) => ({ nr: point.driver.RacingNumber, gap: point.gap }));
+		for (const point of points) {
+			if (point.driver.InPit || point.driver.PitOut) continue;
+			const window = getPitWindow(entries, point.driver.RacingNumber, pitLoss.loss);
+			if (window && window.lostTo.length === 0) result.add(point.driver.RacingNumber);
+		}
+		return result;
+	}, [isRace, pitLoss, points, state?.TrackStatus?.Status]);
 
 	// the pace of every driver in the stint before the last lap, to tell who is pushing and who is fading;
 	// the median leaves out a lap lost in traffic
@@ -486,6 +511,13 @@ export default function VerticalOfDoom() {
 				trend={trend}
 				flags={flags.get(nr)}
 				penaltyPosition={penaltyPositions.get(nr)}
+				freeStop={freeStops.has(nr)}
+				stop={
+					stopRatings.has(nr) && driver.NumberOfLaps - stopRatings.get(nr)!.lap <= STOP_SHOWN_LAPS
+						? stopRatings.get(nr)
+						: undefined
+				}
+				pitLoss={pitLoss.loss}
 				favorite={favoriteDrivers.includes(nr)}
 				danger={!isRace && sessionPart !== undefined && inDangerZone(position, sessionPart, noEntries)}
 				selected={reference === nr}
@@ -555,6 +587,8 @@ export default function VerticalOfDoom() {
 				</div>
 			)}
 
+			{log.length > 0 && <EventLog log={log} tla={tla} />}
+
 			{referencePoint ? (
 				<div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-zinc-800 bg-zinc-900/60 px-3 py-1.5 text-xs">
 					<span className="flex items-center gap-1.5">
@@ -581,7 +615,16 @@ export default function VerticalOfDoom() {
 
 					{pitWindow && (
 						<span className="text-sky-400 tabular-nums">
-							<span className="text-sky-600">Pit {pitLoss}s </span>
+							<span
+								className="text-sky-600"
+								title={
+									pitLoss.stops > 0
+										? `${pitLoss.green.toFixed(1)}s measured on ${pitLoss.stops} stops of this race`
+										: "pit loss from the options, until a few stops are measured"
+								}
+							>
+								Pit {pitLoss.loss.toFixed(1)}s{pitLoss.neutralized && ` ${pitLoss.neutralized}`}{" "}
+							</span>
 							{pitWindow.position === pitWindow.current
 								? `keeps P${pitWindow.position}`
 								: `rejoins P${pitWindow.position}`}
@@ -825,6 +868,52 @@ export default function VerticalOfDoom() {
 	);
 }
 
+const LOG_TONE: Record<RaceLogEntry["kind"], string> = {
+	gain: "text-emerald-400",
+	pit: "text-sky-400",
+	flag: "text-amber-400",
+	fastest: "text-violet-400",
+	out: "text-red-400",
+};
+
+/**
+ * the last overtakes, stops, penalties, fastest laps and retirements, the newest first: a row lights up
+ * for a moment only, this keeps what was missed while looking away
+ */
+function EventLog({ log, tla }: { log: RaceLogEntry[]; tla: (nr: string) => string }) {
+	const text = (entry: RaceLogEntry) => {
+		switch (entry.kind) {
+			case "gain":
+				return `${tla(entry.nr)} passes ${tla(entry.passed ?? "")} for P${entry.position}`;
+			case "pit":
+				return `${tla(entry.nr)} pits from P${entry.position}`;
+			case "flag":
+				return `${tla(entry.nr)} ${entry.detail === "investigation" ? "under investigation" : `penalty ${entry.detail}`}`;
+			case "fastest":
+				return `${tla(entry.nr)} fastest lap ${entry.detail ?? ""}`;
+			case "out":
+				return `${tla(entry.nr)} out`;
+		}
+	};
+
+	return (
+		<div className="flex gap-x-4 overflow-hidden border-b border-zinc-800 px-3 py-1 text-xs whitespace-nowrap">
+			{log.map((entry, index) => (
+				<span
+					key={`log.${entry.id}`}
+					className={clsx("tabular-nums", LOG_TONE[entry.kind], {
+						"opacity-60": index >= 2,
+						"hidden sm:inline": index >= 2,
+					})}
+				>
+					{entry.lap !== null && <span className="mr-1 text-zinc-500">L{entry.lap}</span>}
+					{text(entry)}
+				</span>
+			))}
+		</div>
+	);
+}
+
 type RowExtra = {
 	className?: string;
 	style?: CSSProperties;
@@ -852,6 +941,11 @@ type DriverRowProps = RowExtra & {
 	trend: Trend | null;
 	flags: DriverFlags | undefined;
 	penaltyPosition: number | undefined;
+	// a stop now would rejoin in the same place
+	freeStop: boolean;
+	// the last stop, for a few laps after it was measured
+	stop: StopRating | undefined;
+	pitLoss: number;
 	favorite: boolean;
 	danger: boolean;
 	selected: boolean;
@@ -873,6 +967,9 @@ function DriverRow({
 	trend,
 	flags,
 	penaltyPosition,
+	freeStop,
+	stop,
+	pitLoss,
 	favorite,
 	danger,
 	selected,
@@ -984,6 +1081,19 @@ function DriverRow({
 						+{flags.penalty}s
 						{penaltyPosition !== undefined && penaltyPosition !== parseInt(driver.Position) && ` P${penaltyPosition}`}
 					</Badge>
+				)}
+				{stop && (
+					<span
+						title={`stop on lap ${stop.lap}: ${stop.loss.toFixed(1)}s lost${stop.delta !== null ? `, ${formatSigned(stop.delta, 1)}s on the median stop` : ""}${stop.best ? ", the quickest of the race" : ""}`}
+						className={clsx("shrink-0 rounded px-1 text-[10px] leading-4 font-black tabular-nums", stop.chip)}
+					>
+						STOP {stop.loss.toFixed(1)}
+					</span>
+				)}
+				{freeStop && (
+					<span title={`a stop now, ${pitLoss.toFixed(1)}s, rejoins in the same place`}>
+						<Badge className="border-sky-500 bg-sky-500/15 text-sky-300">BOX=</Badge>
+					</span>
 				)}
 				{flags?.investigation && <Badge className="border-amber-500 text-amber-400">INV</Badge>}
 				{flags?.warning && <Badge className="border-zinc-300 text-zinc-200">B/W</Badge>}

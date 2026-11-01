@@ -10,10 +10,25 @@ import { useDataStore } from "@/stores/useDataStore";
 
 // how long a row stays lit after something happened to the car
 const EVENT_MS = 3000;
+// events kept in the log, the newest first
+const LOG_SIZE = 6;
 
 export type RaceEventKind = "gain" | "loss" | "fastest" | "pit" | "flag" | "out";
 
 export type RaceEvent = { kind: RaceEventKind; id: number };
+
+export type RaceLogEntry = {
+	id: number;
+	// lap of the leader when it happened
+	lap: number | null;
+	kind: Exclude<RaceEventKind, "loss">;
+	nr: string;
+	// the car passed in an overtake
+	passed?: string;
+	position?: number;
+	// the lap time of a fastest lap, the seconds of a penalty
+	detail?: string;
+};
 
 // a car that stops or pits changes places for that reason, not for an overtake
 const PRIORITY: RaceEventKind[] = ["out", "pit", "flag", "fastest", "gain", "loss"];
@@ -21,6 +36,8 @@ const PRIORITY: RaceEventKind[] = ["out", "pit", "flag", "fastest", "gain", "los
 type Car = {
 	position: number;
 	inPit: boolean;
+	// in the pit lane, a car on its out lap can still be passed on track
+	pitLane: boolean;
 	out: boolean;
 	lastLap: string | undefined;
 	fastest: boolean;
@@ -38,6 +55,7 @@ function takeSnapshot(state: State, flags: ReturnType<typeof getDriverFlags>): S
 		cars.set(driver.RacingNumber, {
 			position: parseInt(driver.Position),
 			inPit: !!(driver.InPit || driver.PitOut),
+			pitLane: !!driver.InPit,
 			out: !!(driver.Retired || driver.Stopped),
 			lastLap: driver.LastLapTime?.Value,
 			fastest: !!driver.LastLapTime?.OverallFastest,
@@ -65,10 +83,58 @@ function compare(before: Car, after: Car): RaceEventKind | null {
 }
 
 /**
- * what just happened to every car, overtakes, fastest laps, stops and penalties, for a few seconds
+ * what happened between two states, for the log: places won in the pits or because a car stopped are
+ * not overtakes, the place is only logged when the car passed was on track
  */
-export function useRaceEvents(): Map<string, RaceEvent> {
+function describe(before: Snapshot, after: Snapshot, lap: number | null, next: () => number): RaceLogEntry[] {
+	const entries: RaceLogEntry[] = [];
+
+	after.cars.forEach((car, nr) => {
+		const old = before.cars.get(nr);
+		if (!old) return;
+
+		if (car.out && !old.out) entries.push({ id: next(), lap, kind: "out", nr });
+		if (car.pitLane && !old.pitLane) entries.push({ id: next(), lap, kind: "pit", nr, position: car.position });
+		if (car.penalty > old.penalty) {
+			entries.push({ id: next(), lap, kind: "flag", nr, detail: `+${car.penalty - old.penalty}s` });
+		} else if (car.investigation && !old.investigation) {
+			entries.push({ id: next(), lap, kind: "flag", nr, detail: "investigation" });
+		}
+		if (car.fastest && (!old.fastest || car.lastLap !== old.lastLap)) {
+			entries.push({ id: next(), lap, kind: "fastest", nr, detail: car.lastLap });
+		}
+
+		if (!(car.position < old.position) || car.out || car.pitLane) return;
+		// the cars this one went past, the nearest first
+		const passed = Array.from(after.cars.entries())
+			.filter(([other, otherCar]) => {
+				const was = before.cars.get(other);
+				return (
+					other !== nr &&
+					was &&
+					was.position >= car.position &&
+					was.position < old.position &&
+					otherCar.position > car.position &&
+					!otherCar.pitLane &&
+					!otherCar.out
+				);
+			})
+			.sort((a, b) => a[1].position - b[1].position);
+		if (passed.length > 0) {
+			entries.push({ id: next(), lap, kind: "gain", nr, passed: passed[0][0], position: car.position });
+		}
+	});
+
+	return entries;
+}
+
+/**
+ * what just happened to every car, overtakes, fastest laps, stops and penalties, for a few seconds,
+ * and a log of the last of them
+ */
+export function useRaceEvents(): { events: Map<string, RaceEvent>; log: RaceLogEntry[] } {
 	const [events, setEvents] = useState<Map<string, RaceEvent>>(() => new Map());
+	const [log, setLog] = useState<RaceLogEntry[]>([]);
 
 	useEffect(() => {
 		let previous: Snapshot | null = null;
@@ -92,7 +158,17 @@ export function useRaceEvents(): Map<string, RaceEvent> {
 			previous = next;
 
 			// the first state and a new session have nothing to compare with
-			if (!before || before.sessionKey !== next.sessionKey) return;
+			if (!before || before.sessionKey !== next.sessionKey) {
+				if (before) setLog([]);
+				return;
+			}
+
+			// in practice and qualifying places change with the lap times, not on track
+			const logged =
+				state.SessionInfo?.Type === "Race"
+					? describe(before, next, state.LapCount?.CurrentLap ?? null, () => ++counter)
+					: [];
+			if (logged.length > 0) setLog((current) => [...logged.reverse(), ...current].slice(0, LOG_SIZE));
 
 			const found = new Map<string, RaceEvent>();
 			next.cars.forEach((car, nr) => {
@@ -123,5 +199,5 @@ export function useRaceEvents(): Map<string, RaceEvent> {
 		};
 	}, []);
 
-	return events;
+	return { events, log };
 }
