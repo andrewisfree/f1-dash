@@ -2,6 +2,15 @@
 
 Storico degli interventi su deploy e infrastruttura di f1-dash. Voce più recente in alto.
 
+## 2026-11-01 — Pagina pilota con la tabella dei rivali
+
+Installata sul 108 la web a `9e266b2` alle 23:29 UTC: nella pagina pilota i riquadri iniziali e le schede dei
+rivali lasciano il posto a una tabella con la macchina davanti, quella dietro e una terza fissata (distacco,
+andamento, delta per settore, gomme, ultimo giro, passo, variazione nello stint, undercut); al traguardo il delta
+sul giro lampeggia per 4 s. Provata sulla gara del Messico rigiocata. Ricreato solo `web`. Controllo:
+`NEXT_PUBLIC_LIVE_URL` su `http://192.168.188.161:4000`, `/dashboard/driver/44`, `/dashboard/vertical` e `/api/laps`
+rispondono 200, registratore dei giri ripartito, disco 4,6 GB liberi.
+
 ## 2026-11-01 — Pit Wall tolta, stint cliccabili nella pagina pilota
 
 Installata sul 108 la web a `be3d736` alle 23:10 UTC: nella pagina pilota si clicca un set sulla barra degli stint
