@@ -32,10 +32,6 @@ const liveTimingItems = [
 		name: "Practice",
 	},
 	{
-		href: "/dashboard/pitwall",
-		name: "Pit Wall",
-	},
-	{
 		href: "/dashboard/qualifying",
 		name: "Qualifying",
 	},

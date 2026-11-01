@@ -1,11 +1,11 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import clsx from "clsx";
 
-import type { Stint, TimingDataDriver } from "@/types/state.type";
+import type { TimingDataDriver } from "@/types/state.type";
 
 import { computeGapsSeconds, getOrderedTimingDrivers, parseLapSeconds, parseLapsDown } from "@/lib/gaps";
 import { buildLapLog, getStintDegradation, type LapLogRow } from "@/lib/lapLog";
@@ -46,7 +46,6 @@ import Badge from "@/components/driver/Badge";
 import DriverCarMetrics from "@/components/driver/DriverCarMetrics";
 import LapChart, { type LapChartPoint, type LapChartSeries } from "@/components/driver/LapChart";
 import TrendText from "@/components/driver/TrendText";
-import TyreTag from "@/components/practice/TyreTag";
 import Footer from "@/components/Footer";
 import { Card, Delta, Fact, GapBar, StintStrip, Tile, TyreWearBar } from "@/components/panel/Panel";
 
@@ -140,6 +139,8 @@ export default function DriverFocus({ nr: requested }: Props) {
 	const pitLoss = useSettingsStore((store) => store.verticalPitLoss);
 	const pinnedRival = useRivalStore((store) => store.rival);
 	const setPinnedRival = useRivalStore((store) => store.setRival);
+	// the set whose laps show under the stints, the current one until another is picked
+	const [pickedStint, setPickedStint] = useState<{ nr: string; stint: number | null } | null>(null);
 
 	const lines = state?.TimingData?.Lines;
 	const sessionPart = state?.TimingData?.SessionPart;
@@ -283,6 +284,7 @@ export default function DriverFocus({ nr: requested }: Props) {
 	const logRows = buildLapLog(samples, appData, driver.NumberOfLaps);
 	const degradation = (stintNumber: number) => getStintDegradation(logRows, stintNumber);
 	const currentDegradation = degradation(stints.length);
+	const shownStint = pickedStint?.nr === nr ? pickedStint.stint : stints.length || null;
 	const wear = tyreWear(stint);
 	const rank = stats?.PersonalBestLapTime?.Position;
 
@@ -466,21 +468,21 @@ export default function DriverFocus({ nr: requested }: Props) {
 
 				{stints.length > 0 && (
 					<div className="mt-3">
-						<StintStrip stints={stints} degradation={degradation} />
+						<StintStrip
+							stints={stints}
+							degradation={degradation}
+							selected={shownStint}
+							onSelect={(number) => setPickedStint({ nr, stint: number === shownStint ? null : number })}
+						/>
+						{shownStint !== null && (
+							<StintLaps
+								rows={logRows.filter((row) => row.stint === shownStint)}
+								digits={practiceDigits(state.SessionInfo?.Type)}
+							/>
+						)}
 					</div>
 				)}
 			</div>
-
-			{logRows.length > 0 && (
-				<Card title="Laps by set, coloured against the typical lap on the set">
-					<StintLapStrips
-						rows={logRows}
-						stints={stints}
-						degradation={degradation}
-						digits={practiceDigits(state.SessionInfo?.Type)}
-					/>
-				</Card>
-			)}
 
 			<label className="flex flex-wrap items-center gap-2 rounded-lg border border-zinc-800 px-3 py-2 text-sm">
 				<span className="text-zinc-500">Compare with</span>
@@ -747,58 +749,26 @@ export default function DriverFocus({ nr: requested }: Props) {
 }
 
 /**
- * every lap of the driver as chips, set by set, the current set first, like the laps on the pit wall
+ * the laps of one set as chips, coloured against the typical lap on the set
  */
-function StintLapStrips({
-	rows,
-	stints,
-	degradation,
-	digits,
-}: {
-	rows: LapLogRow[];
-	stints: Stint[];
-	degradation: (stint: number) => number | null;
-	digits: number;
-}) {
-	const byStint = new Map<number, LapLogRow[]>();
-	for (const row of rows) byStint.set(row.stint, [...(byStint.get(row.stint) ?? []), row]);
-	const groups = Array.from(byStint.entries()).sort((a, b) => b[0] - a[0]);
+function StintLaps({ rows, digits }: { rows: LapLogRow[]; digits: number }) {
+	if (rows.length === 0) return <p className="mt-1.5 text-xs text-zinc-600">No laps recorded on this set.</p>;
 
 	return (
-		<div className="flex flex-col gap-1.5">
-			{groups.map(([number, laps]) => {
-				const deg = degradation(number);
-
-				return (
-					<div key={`stint.${number}`} className="flex flex-wrap items-center gap-1 text-xs">
-						<span className="mr-1 flex w-24 shrink-0 items-center gap-1 text-zinc-500">
-							<TyreTag stint={stints[number - 1]} age={stints[number - 1]?.TotalLaps} />
-							{deg !== null && (
-								<span
-									className={clsx("font-semibold tabular-nums", TONE_TEXT[degradationTone(deg)])}
-									title="tyre loss per lap on this set, fuel burn added back"
-								>
-									{formatSigned(deg, 2)}
-								</span>
-							)}
-						</span>
-
-						{laps.map((row) => (
-							<span
-								key={`lap.${row.lap}`}
-								className={clsx(
-									"rounded px-1 py-0.5 tabular-nums",
-									row.reason !== null ? TONE_CHIP.excluded : row.personalBest ? TONE_CHIP.gain : heatChip(row.delta),
-								)}
-								title={`Lap ${row.lap}${row.reason ? `, ${row.reason}` : row.delta !== null ? `, ${formatSigned(row.delta, 2)} vs the set` : ""}`}
-							>
-								<span className="mr-1 text-[10px] opacity-60">{row.lap}</span>
-								{row.lapTime !== null ? formatLapTime(row.lapTime, digits) : "-"}
-							</span>
-						))}
-					</div>
-				);
-			})}
+		<div className="mt-1.5 flex flex-wrap gap-1 text-xs">
+			{rows.map((row) => (
+				<span
+					key={`lap.${row.lap}`}
+					className={clsx(
+						"rounded px-1 py-0.5 tabular-nums",
+						row.reason !== null ? TONE_CHIP.excluded : row.personalBest ? TONE_CHIP.gain : heatChip(row.delta),
+					)}
+					title={`Lap ${row.lap}${row.tyreAge !== null ? `, tyre lap ${row.tyreAge}` : ""}${row.reason ? `, ${row.reason}` : row.delta !== null ? `, ${formatSigned(row.delta, 2)} vs the set` : ""}`}
+				>
+					<span className="mr-1 text-[10px] opacity-60">{row.lap}</span>
+					{row.lapTime !== null ? formatLapTime(row.lapTime, digits) : "-"}
+				</span>
+			))}
 		</div>
 	);
 }

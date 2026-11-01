@@ -1,9 +1,7 @@
 import type { ReactNode } from "react";
 import clsx from "clsx";
 
-import type { Sector, Stint } from "@/types/state.type";
-
-import type { PushLap, PushSector } from "@/lib/qualifyingBoard";
+import type { Stint } from "@/types/state.type";
 
 import { formatSigned } from "@/lib/race";
 import {
@@ -11,10 +9,8 @@ import {
 	degradationTone,
 	deltaTone,
 	TONE_BORDER,
-	TONE_CHIP,
 	TONE_FILL,
 	TONE_TEXT,
-	segmentFill,
 	tyreWear,
 	type Tone,
 } from "@/lib/tones";
@@ -85,14 +81,6 @@ export function Delta({ value, digits = 3 }: { value: number | null; digits?: nu
 	return <span className={tone === "neutral" ? "text-zinc-400" : TONE_TEXT[tone]}>{formatSigned(value, digits)}</span>;
 }
 
-export function Chip({ tone, className, children }: { tone: Tone; className?: string; children: ReactNode }) {
-	return (
-		<span className={clsx("inline-block rounded px-1.5 py-0.5 tabular-nums", TONE_CHIP[tone], className)}>
-			{children}
-		</span>
-	);
-}
-
 // longer gaps fill the bar, a car within a second barely shows
 const GAP_SCALE = 5;
 
@@ -127,12 +115,15 @@ type StintStripProps = {
 	stints: Stint[];
 	// tyre loss per lap of every stint, by its number from 1
 	degradation: (stint: number) => number | null;
+	// the set picked to show its laps, by its number from 1, when the blocks can be picked
+	selected?: number | null;
+	onSelect?: (stint: number) => void;
 };
 
 /**
  * one block per set, as long as the laps run on it, in the colour of the compound
  */
-export function StintStrip({ stints, degradation }: StintStripProps) {
+export function StintStrip({ stints, degradation, selected, onSelect }: StintStripProps) {
 	if (stints.length === 0) return null;
 
 	return (
@@ -145,10 +136,14 @@ export function StintStrip({ stints, degradation }: StintStripProps) {
 				return (
 					<div
 						key={`stint.${index}`}
+						onClick={onSelect ? () => onSelect(index + 1) : undefined}
 						className={clsx(
-							"min-w-0 truncate rounded px-1.5 py-1 tabular-nums",
+							"min-w-0 truncate rounded px-1.5 py-1 text-left tabular-nums",
 							COMPOUND_CHIP[stint.Compound ?? ""] ?? "bg-zinc-800 text-zinc-300",
-							current && "ring-1 ring-zinc-300",
+							onSelect && "cursor-pointer",
+							selected === undefined
+								? current && "ring-1 ring-zinc-300"
+								: selected === index + 1 && "ring-2 ring-zinc-100",
 						)}
 						style={{ flexGrow: laps, flexBasis: 0 }}
 						title={`${stint.Compound ?? "Unknown"}, ${stint.New?.toLowerCase() === "true" ? "new" : "used"}, ${laps} laps`}
@@ -159,44 +154,6 @@ export function StintStrip({ stints, degradation }: StintStripProps) {
 								{formatSigned(deg, 2)}
 							</span>
 						)}
-					</div>
-				);
-			})}
-		</div>
-	);
-}
-
-const PUSH_TONE: Record<NonNullable<PushSector["tone"]>, Tone> = { best: "best", improved: "gain", slower: "warn" };
-
-/**
- * the mini sectors of the lap in progress, with the time of every sector done and what it lost to the best
- */
-export function MiniSectors({ sectors, push }: { sectors: Sector[]; push: PushLap | null }) {
-	return (
-		<div className="grid grid-cols-3 gap-1.5">
-			{sectors.slice(0, 3).map((sector, index) => {
-				const info = push?.sectors[index];
-				const tone: Tone = info?.done && info.tone ? PUSH_TONE[info.tone] : sector.Value ? "neutral" : "excluded";
-
-				return (
-					<div key={`mini.${index}`}>
-						<div className="flex gap-px">
-							{(sector.Segments ?? []).map((segment, segmentIndex) => (
-								<span
-									key={`segment.${segmentIndex}`}
-									className={clsx("h-2 flex-1 rounded-full", segmentFill(segment.Status))}
-								/>
-							))}
-						</div>
-						<p
-							className={clsx(
-								"mt-1 rounded px-1 py-0.5 text-center text-xs font-semibold tabular-nums",
-								TONE_CHIP[tone],
-							)}
-						>
-							{info?.done && info.time !== null ? info.time.toFixed(3) : sector.Value || `S${index + 1}`}
-							{info?.loss != null && <span className="ml-1 font-normal opacity-70">{formatSigned(info.loss, 2)}</span>}
-						</p>
 					</div>
 				);
 			})}
