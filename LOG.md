@@ -2,6 +2,14 @@
 
 Storico degli interventi su deploy e infrastruttura di f1-dash. Voce più recente in alto.
 
+## 2026-11-01 — Pit Wall tolta, stint cliccabili nella pagina pilota
+
+Installata sul 108 la web a `be3d736` alle 23:10 UTC: nella pagina pilota si clicca un set sulla barra degli stint
+e sotto compaiono i suoi giri colorati (di default il set attuale); la pagina Pit Wall è eliminata, la pagina pilota
+la copre. Ricreato solo `web`. Controllo: `NEXT_PUBLIC_LIVE_URL` su `http://192.168.188.161:4000`,
+`/dashboard/driver/44`, `/dashboard/vertical` e `/api/laps` rispondono 200, `/dashboard/pitwall` 404, registratore
+dei giri ripartito, disco 4,6 GB liberi.
+
 ## 2026-11-01 — Dopo la gara del Messico
 
 Alle 22:51 UTC `f1-record` fermato e rimosso, gara finita. Copiati sul PC `recordings/2026-mexico.tsv` (22 MB, tutto il
