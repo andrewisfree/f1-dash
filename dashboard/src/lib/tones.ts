@@ -19,24 +19,6 @@ export const TONE_TEXT: Record<Tone, string> = {
 	excluded: "text-zinc-600",
 };
 
-export const TONE_BORDER: Record<Tone, string> = {
-	best: "border-l-violet-500",
-	gain: "border-l-emerald-500",
-	warn: "border-l-amber-500",
-	loss: "border-l-red-500",
-	neutral: "border-l-zinc-700",
-	excluded: "border-l-zinc-800",
-};
-
-export const TONE_FILL: Record<Tone, string> = {
-	best: "bg-violet-500",
-	gain: "bg-emerald-500",
-	warn: "bg-amber-500",
-	loss: "bg-red-500",
-	neutral: "bg-zinc-500",
-	excluded: "bg-zinc-700",
-};
-
 export const TONE_CHIP: Record<Tone, string> = {
 	best: "bg-violet-500/25 text-violet-200",
 	gain: "bg-emerald-500/20 text-emerald-200",

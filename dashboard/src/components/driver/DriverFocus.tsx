@@ -5,7 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import clsx from "clsx";
 
-import type { TimingDataDriver } from "@/types/state.type";
+import type { Stint, TimingDataDriver } from "@/types/state.type";
 
 import { computeGapsSeconds, getOrderedTimingDrivers, parseLapSeconds, parseLapsDown } from "@/lib/gaps";
 import { buildLapLog, getStintDegradation, type LapLogRow } from "@/lib/lapLog";
@@ -21,6 +21,7 @@ import {
 	type Trend,
 } from "@/lib/race";
 import { getDriverFlags } from "@/lib/raceControl";
+import { describeUndercut, getUndercuts } from "@/lib/undercut";
 import { tireIcon } from "@/lib/tires";
 import {
 	degradationTone,
@@ -29,15 +30,15 @@ import {
 	lapTone,
 	rivalTone,
 	sectorTone,
-	TONE_BORDER,
 	TONE_CHIP,
 	TONE_TEXT,
-	tyreWear,
 } from "@/lib/tones";
 
 import { useDataStore } from "@/stores/useDataStore";
 import { useLapHistoryStore, type LapSample } from "@/stores/useLapHistoryStore";
+import { useNow } from "@/hooks/useNow";
 import { useRivalStore } from "@/stores/useRivalStore";
+import { useSectorStore, type SectorLap } from "@/stores/useSectorStore";
 import { useSettingsStore } from "@/stores/useSettingsStore";
 
 import { RaceControlMessage } from "@/components/dashboard/RaceControlMessage";
@@ -45,9 +46,8 @@ import RadioMessage from "@/components/dashboard/RadioMessage";
 import Badge from "@/components/driver/Badge";
 import DriverCarMetrics from "@/components/driver/DriverCarMetrics";
 import LapChart, { type LapChartPoint, type LapChartSeries } from "@/components/driver/LapChart";
-import TrendText from "@/components/driver/TrendText";
 import Footer from "@/components/Footer";
-import { Card, Delta, Fact, GapBar, StintStrip, Tile, TyreWearBar } from "@/components/panel/Panel";
+import { Card, Delta, StintStrip } from "@/components/panel/Panel";
 
 // chart colors follow the role, the selected driver and the cars compared with it
 // green and purple are left to improved and best laps
@@ -58,7 +58,15 @@ const COLOR_BEHIND = "#d55181";
 // smaller changes of the gap are timing noise
 const MIN_GAIN = 0.02;
 
+const COLOR_PINNED = "#a1a1aa";
+
 const LAP_LOG_SIZE = 20;
+
+// the lap delta stays this long once both cars crossed the line
+const LAP_FLASH_MS = 4000;
+// a smaller change of the gap over the stint is shown as even, and fewer laps say nothing yet
+const STINT_CHANGE_SECONDS = 0.3;
+const STINT_CHANGE_LAPS = 3;
 
 type Props = {
 	nr: string | null;
@@ -66,6 +74,8 @@ type Props = {
 
 type Rival = {
 	driver: TimingDataDriver;
+	// the car right ahead, right behind or one pinned anywhere
+	key: "ahead" | "behind" | "pinned";
 	role: "ahead" | "behind";
 	pinned: boolean;
 	interval: number | null;
@@ -78,12 +88,6 @@ function formatLap(seconds: number) {
 	const minutes = Math.floor(seconds / 60);
 	const rest = (seconds - minutes * 60).toFixed(3).padStart(6, "0");
 	return minutes > 0 ? `${minutes}:${rest}` : rest;
-}
-
-function delta(own?: string, other?: string): number | null {
-	const a = parseLapSeconds(own);
-	const b = parseLapSeconds(other);
-	return a !== null && b !== null ? a - b : null;
 }
 
 // gap to another car per lap, positive while that car is ahead
@@ -141,6 +145,8 @@ export default function DriverFocus({ nr: requested }: Props) {
 	const setPinnedRival = useRivalStore((store) => store.setRival);
 	// the set whose laps show under the stints, the current one until another is picked
 	const [pickedStint, setPickedStint] = useState<{ nr: string; stint: number | null } | null>(null);
+	const sectorLaps = useSectorStore((store) => store.laps);
+	const now = useNow(500);
 
 	const lines = state?.TimingData?.Lines;
 	const sessionPart = state?.TimingData?.SessionPart;
@@ -172,16 +178,18 @@ export default function DriverFocus({ nr: requested }: Props) {
 		// gaps to the leader only compare between cars on the lead lap
 		const comparable = (other: TimingDataDriver) => !isRace || (!isOffLeadLap(driver) && !isOffLeadLap(other));
 
-		// a pinned rival stays compared however the positions change
-		const candidates: { other: TimingDataDriver | undefined; role: Rival["role"] }[] = pinned
-			? [{ other: pinned, role: parseInt(pinned.Position) < parseInt(driver.Position) ? "ahead" : "behind" }]
-			: [
-					{ other: ordered[index - 1], role: "ahead" },
-					{ other: ordered[index + 1], role: "behind" },
-				];
+		// a pinned rival stays compared however the positions change, next to the cars around
+		const candidates: { other: TimingDataDriver | undefined; key: Rival["key"] }[] = [
+			{ other: ordered[index - 1], key: "ahead" },
+			{ other: ordered[index + 1], key: "behind" },
+		];
+		if (pinned && !candidates.some(({ other }) => other?.RacingNumber === pinned.RacingNumber)) {
+			candidates.push({ other: pinned, key: "pinned" });
+		}
 
-		return candidates.flatMap(({ other, role }): Rival[] => {
+		const found = candidates.flatMap(({ other, key }): Rival[] => {
 			if (!other) return [];
+			const role = parseInt(other.Position) < parseInt(driver.Position) ? "ahead" : "behind";
 
 			const interval = comparable(other)
 				? Math.abs((gaps.get(driver.RacingNumber) ?? 0) - (gaps.get(other.RacingNumber) ?? 0))
@@ -192,8 +200,19 @@ export default function DriverFocus({ nr: requested }: Props) {
 					? describeTrend(history[behind.RacingNumber], history[ahead.RacingNumber], interval, lapsRemaining)
 					: null;
 
-			return [{ driver: other, role, pinned: !!pinned, interval, trend, pace: getPace(history[other.RacingNumber]) }];
+			return [
+				{
+					driver: other,
+					key,
+					role,
+					pinned: other.RacingNumber === pinned?.RacingNumber,
+					interval,
+					trend,
+					pace: getPace(history[other.RacingNumber]),
+				},
+			];
 		});
+		return found.sort((a, b) => parseInt(a.driver.Position) - parseInt(b.driver.Position));
 	}, [driver, gaps, history, index, isRace, lapsRemaining, neutralized, ordered, pinned]);
 
 	const leadLap = useMemo(
@@ -209,6 +228,11 @@ export default function DriverFocus({ nr: requested }: Props) {
 		[isRace, leadLap, nr, pitLoss],
 	);
 
+	const undercuts = useMemo(
+		() => getUndercuts(history, state?.LapCount?.CurrentLap ?? null, pitLoss),
+		[history, pitLoss, state?.LapCount?.CurrentLap],
+	);
+
 	const charts = useMemo(() => {
 		if (!nr) return { gap: [], lapTime: [] };
 
@@ -216,8 +240,9 @@ export default function DriverFocus({ nr: requested }: Props) {
 		const statsLines = state?.TimingStats?.Lines;
 		const name = (number: string) => state?.DriverList?.[number]?.Tla ?? number;
 		const label = (rival: Rival) =>
-			rival.pinned ? name(rival.driver.RacingNumber) : `${name(rival.driver.RacingNumber)} (${rival.role})`;
-		const color = (rival: Rival) => (rival.pinned || rival.role === "ahead" ? COLOR_AHEAD : COLOR_BEHIND);
+			rival.key === "pinned" ? name(rival.driver.RacingNumber) : `${name(rival.driver.RacingNumber)} (${rival.key})`;
+		const color = (rival: Rival) =>
+			rival.key === "pinned" ? COLOR_PINNED : rival.key === "ahead" ? COLOR_AHEAD : COLOR_BEHIND;
 		// the fastest lap of the session, if this driver holds it
 		const fastest = (number: string) =>
 			statsLines?.[number]?.PersonalBestLapTime?.Position === 1
@@ -225,7 +250,7 @@ export default function DriverFocus({ nr: requested }: Props) {
 				: null;
 
 		const gap: LapChartSeries[] = rivals.map((rival) => ({
-			key: rival.role,
+			key: rival.key,
 			label: label(rival),
 			color: color(rival),
 			points: gapSeries(history[nr], history[rival.driver.RacingNumber]),
@@ -239,7 +264,7 @@ export default function DriverFocus({ nr: requested }: Props) {
 				points: lapTimeSeries(history[nr], fastest(nr)),
 			},
 			...rivals.map((rival) => ({
-				key: rival.role,
+				key: rival.key,
 				label: label(rival),
 				color: color(rival),
 				points: lapTimeSeries(history[rival.driver.RacingNumber], fastest(rival.driver.RacingNumber)),
@@ -267,7 +292,6 @@ export default function DriverFocus({ nr: requested }: Props) {
 	const appData = state.TimingAppData?.Lines[nr];
 	const stints = appData?.Stints ?? [];
 	const stint = stints[stints.length - 1];
-	const stats = state.TimingStats?.Lines[nr];
 	const driverFlags = flags.get(nr);
 	const carData = carsData?.[nr]?.Channels;
 
@@ -278,18 +302,15 @@ export default function DriverFocus({ nr: requested }: Props) {
 	const gapToLeader = gaps.get(nr) ?? 0;
 	const out = driver.Retired || driver.Stopped;
 
-	const topSpeed = (stats?.BestSpeeds as Record<string, { Value: string; Position?: number }> | undefined)?.ST;
 	const samples = history[nr] ?? [];
 	const pace = getPace(samples);
 	const logRows = buildLapLog(samples, appData, driver.NumberOfLaps);
 	const degradation = (stintNumber: number) => getStintDegradation(logRows, stintNumber);
 	const currentDegradation = degradation(stints.length);
 	const shownStint = pickedStint?.nr === nr ? pickedStint.stint : stints.length || null;
-	const wear = tyreWear(stint);
-	const rank = stats?.PersonalBestLapTime?.Position;
 
-	const aheadRival = rivals.find((rival) => rival.role === "ahead");
-	const behindRival = rivals.find((rival) => rival.role === "behind");
+	const aheadRival = rivals.find((rival) => rival.key === "ahead");
+	const behindRival = rivals.find((rival) => rival.key === "behind");
 	const status =
 		isRace && !out
 			? describeStatus(
@@ -297,8 +318,6 @@ export default function DriverFocus({ nr: requested }: Props) {
 					behindRival ? { tla: tla(behindRival.driver.RacingNumber), trend: behindRival.trend } : null,
 				)
 			: null;
-	const aheadPace = aheadRival?.pace ?? null;
-	const paceVsAhead = pace !== null && aheadPace !== null ? pace - aheadPace : null;
 	const lapText = isRace && state.LapCount ? `Lap ${state.LapCount.CurrentLap}/${state.LapCount.TotalLaps}` : null;
 
 	const lapLog = logRows.slice(-LAP_LOG_SIZE).reverse();
@@ -389,82 +408,12 @@ export default function DriverFocus({ nr: requested }: Props) {
 						)}
 						<p className="ml-auto flex gap-3 text-zinc-500 tabular-nums">
 							{lapText && <span>{lapText}</span>}
-							{paceVsAhead !== null && aheadRival && (
-								<span>
-									Pace {formatSigned(paceVsAhead, 2)}s vs {tla(aheadRival.driver.RacingNumber)}
-								</span>
+							{!out && position > 1 && (
+								<span>{lapsDown > 0 ? `+${lapsDown}L` : `+${gapToLeader.toFixed(1)}s`} to the leader</span>
 							)}
 						</p>
 					</div>
 				)}
-
-				<div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-6">
-					{isRace && (
-						<Tile label="Grid" tone={gained === null || gained === 0 ? "neutral" : gained > 0 ? "gain" : "loss"}>
-							{Number.isFinite(gridPosition) ? `P${gridPosition}` : "-"}
-							{gained !== null && gained !== 0 && (
-								<span className={clsx("ml-1.5 text-sm", gained > 0 ? "text-emerald-400" : "text-red-400")}>
-									{gained > 0 ? `+${gained}` : gained}
-								</span>
-							)}
-						</Tile>
-					)}
-
-					<Tile label={isRace ? "Gap to leader" : "Gap to fastest"}>
-						{out ? "OUT" : lapsDown > 0 ? `+${lapsDown}L` : position === 1 ? "-" : `+${gapToLeader.toFixed(3)}`}
-					</Tile>
-
-					<Tile label="Last lap" note={`Best ${driver.BestLapTime?.Value || "-"}`} tone={lapTone(driver.LastLapTime)}>
-						{driver.LastLapTime?.Value || "-"}
-					</Tile>
-
-					<Tile
-						label="Best lap rank"
-						tone={rank === 1 ? "best" : rank !== undefined && rank <= 3 ? "gain" : "neutral"}
-						note={
-							topSpeed?.Value ? `Top speed ${topSpeed.Value}${topSpeed.Position ? ` (P${topSpeed.Position})` : ""}` : ""
-						}
-					>
-						{stats?.PersonalBestLapTime?.Position ? `P${stats.PersonalBestLapTime.Position}` : "-"}
-					</Tile>
-
-					<Tile
-						label="Tyre"
-						tone={wear?.tone}
-						note={
-							<>
-								<TyreWearBar stint={stint} />
-								{isRace && `${Math.max(0, stints.length - 1)} stop${stints.length === 2 ? "" : "s"}`}
-								{currentDegradation !== null && (
-									<span
-										className={TONE_TEXT[degradationTone(currentDegradation)]}
-										title="Tyre loss per lap on this set, fuel burn added back"
-									>
-										{`${isRace ? " · " : ""}deg ${formatSigned(currentDegradation, 2)}s/lap`}
-									</span>
-								)}
-							</>
-						}
-					>
-						<span className="flex items-center gap-1.5">
-							<Image src={tireIcon(stint?.Compound)} alt={stint?.Compound ?? "unknown tire"} width={22} height={22} />
-							{stint?.TotalLaps ?? 0}L
-						</span>
-					</Tile>
-
-					<Tile label="Sectors">
-						<span className="flex flex-wrap gap-1 text-sm">
-							{driver.Sectors.slice(0, 3).map((sector, sectorIndex) => (
-								<span
-									key={`sector.${sectorIndex}`}
-									className={clsx("rounded px-1 tabular-nums", TONE_CHIP[sectorTone(sector)])}
-								>
-									{sector.Value || "-"}
-								</span>
-							))}
-						</span>
-					</Tile>
-				</div>
 
 				{stints.length > 0 && (
 					<div className="mt-3">
@@ -485,13 +434,13 @@ export default function DriverFocus({ nr: requested }: Props) {
 			</div>
 
 			<label className="flex flex-wrap items-center gap-2 rounded-lg border border-zinc-800 px-3 py-2 text-sm">
-				<span className="text-zinc-500">Compare with</span>
+				<span className="text-zinc-500">Pin a third car</span>
 				<select
 					className="rounded-lg bg-zinc-900 px-2 py-1.5 text-sm"
 					value={pinned?.RacingNumber ?? ""}
 					onChange={(event) => setPinnedRival(event.target.value || null)}
 				>
-					<option value="">The cars ahead and behind</option>
+					<option value="">Nobody</option>
 					{ordered
 						.filter((entry) => entry.RacingNumber !== nr)
 						.map((entry) => (
@@ -500,92 +449,211 @@ export default function DriverFocus({ nr: requested }: Props) {
 							</option>
 						))}
 				</select>
-				{pinned && <span className="text-zinc-500">stays fixed when positions change</span>}
+				{pinned && <span className="text-zinc-500">stays in the table when positions change</span>}
 			</label>
 
-			<div className={clsx("grid grid-cols-1 gap-2", { "lg:grid-cols-2": rivals.length > 1 })}>
-				{rivals.map((rival) => {
-					const other = rival.driver;
-					const otherStints = state.TimingAppData?.Lines[other.RacingNumber]?.Stints ?? [];
-					const otherStint = otherStints[otherStints.length - 1];
-					const tyreAge = (otherStint?.TotalLaps ?? 0) - (stint?.TotalLaps ?? 0);
-					const paceDelta = pace !== null && rival.pace !== null ? pace - rival.pace : null;
-					const bestLap = delta(driver.BestLapTime?.Value, other.BestLapTime?.Value);
-					const tone = rivalTone(rival.trend, rival.role);
-
-					return (
-						<Card
-							key={`rival.${rival.role}`}
-							className={clsx("border-l-4", TONE_BORDER[tone])}
-							title={`${rival.pinned ? "Pinned rival, " : "Car "}${rival.role}`}
-							action={
-								<button
-									type="button"
-									className="cursor-pointer rounded border border-zinc-700 px-3 py-1 text-sm text-zinc-400"
-									onClick={() => setPinnedRival(rival.pinned ? null : other.RacingNumber)}
+			{rivals.length > 0 && (
+				<Card title={`Around ${tla(nr)}: gap, trend, sectors and lap against each car`} className="overflow-x-auto">
+					<table className="w-full text-right text-sm whitespace-nowrap tabular-nums [&_td]:px-1.5 [&_th]:px-1.5">
+						<thead className="text-xs text-zinc-500">
+							<tr>
+								<th className="text-left font-normal">Car</th>
+								<th className="font-normal" title={`seconds to ${tla(nr)}, negative when ahead`}>
+									Gap
+								</th>
+								<th className="font-normal" title="change of the gap per lap, green when it goes the right way">
+									Trend
+								</th>
+								<th
+									className="hidden text-center font-normal sm:table-cell"
+									title={`time ${tla(nr)} gained or lost in each sector of this lap, the lap at the line`}
 								>
-									{rival.pinned ? "Unpin" : "Pin"}
-								</button>
-							}
-						>
-							<div className="flex flex-wrap items-center justify-between gap-2">
-								<Link href={`/dashboard/driver/${other.RacingNumber}`} className="flex items-center gap-2">
-									<span className="text-sm text-zinc-500 tabular-nums">P{other.Position}</span>
-									<span
-										className="h-6 w-1 rounded-full"
-										style={{ backgroundColor: `#${drivers[other.RacingNumber]?.TeamColour ?? "71717a"}` }}
-									/>
-									<span className="font-mono text-xl font-black">{tla(other.RacingNumber)}</span>
-								</Link>
+									Sectors
+								</th>
+								<th className="font-normal">Tyre</th>
+								<th className="hidden font-normal md:table-cell">Last lap</th>
+								<th
+									className="hidden font-normal md:table-cell"
+									title={`pace of ${tla(nr)} over the last 3 laps against the other car`}
+								>
+									Pace
+								</th>
+								<th
+									className="hidden font-normal lg:table-cell"
+									title="change of the gap since both cars are on their current sets"
+								>
+									Stint
+								</th>
+								<th className="hidden text-left font-normal lg:table-cell">Box</th>
+							</tr>
+						</thead>
+						<tbody>
+							{[
+								...rivals.filter((rival) => rival.role === "ahead"),
+								null,
+								...rivals.filter((rival) => rival.role === "behind"),
+							].map((rival) => {
+								if (rival === null) {
+									return (
+										<tr key="self" className="bg-zinc-800/70 font-semibold">
+											<td className="rounded-l px-1.5 py-1 text-left">
+												<span className="mr-1 text-xs text-zinc-500">P{driver.Position}</span>
+												<span className="font-mono font-black">{tla(nr)}</span>
+												{gained !== null && gained !== 0 && (
+													<span
+														className={clsx("ml-1 text-[10px]", gained > 0 ? "text-emerald-400" : "text-red-400")}
+														title="places since the start"
+													>
+														{gained > 0 ? `▲${gained}` : `▼${-gained}`}
+													</span>
+												)}
+											</td>
+											<td className="text-zinc-600">-</td>
+											<td />
+											<td className="hidden px-1 sm:table-cell">
+												<span className="flex justify-center gap-0.5 text-xs">
+													{driver.Sectors.slice(0, 3).map((sector, sectorIndex) => (
+														<span
+															key={`own.sector.${sectorIndex}`}
+															className={clsx("w-14 rounded px-0.5 text-center", TONE_CHIP[sectorTone(sector)])}
+														>
+															{sector.Value || "·"}
+														</span>
+													))}
+												</span>
+											</td>
+											<td>
+												<TyreCell stint={stint} />
+											</td>
+											<td className={clsx("hidden md:table-cell", TONE_TEXT[lapTone(driver.LastLapTime)])}>
+												{driver.LastLapTime?.Value || "-"}
+											</td>
+											<td className="hidden md:table-cell" title="average of the last 3 clean laps">
+												{pace !== null ? formatLapTime(pace, 1) : "-"}
+											</td>
+											<td
+												className={clsx(
+													"hidden lg:table-cell",
+													currentDegradation !== null
+														? TONE_TEXT[degradationTone(currentDegradation)]
+														: "text-zinc-600",
+												)}
+												title="tyre loss per lap on this set, fuel burn added back"
+											>
+												{currentDegradation !== null ? `deg ${formatSigned(currentDegradation, 2)}` : "-"}
+											</td>
+											<td className="hidden rounded-r px-1.5 text-left lg:table-cell">
+												{pitWindow && !out ? (
+													pitWindow.position === pitWindow.current ? (
+														<span className="text-emerald-400">free stop</span>
+													) : (
+														<span className="text-zinc-300" title="where a stop now rejoins">
+															P{pitWindow.position}
+															{pitWindow.ahead && (
+																<span className="font-normal text-zinc-500">
+																	, {pitWindow.ahead.margin.toFixed(1)}s behind {tla(pitWindow.ahead.nr)}
+																</span>
+															)}
+														</span>
+													)
+												) : (
+													"-"
+												)}
+											</td>
+										</tr>
+									);
+								}
 
-								<div className="text-right tabular-nums">
-									<p className="text-xl leading-tight font-semibold">
-										{rival.interval !== null ? `${rival.interval.toFixed(3)}s` : "-"}
-									</p>
-									{rival.trend && <TrendText trend={rival.trend} className="text-xs" />}
-								</div>
-							</div>
+								const other = rival.driver;
+								const otherStints = state.TimingAppData?.Lines[other.RacingNumber]?.Stints ?? [];
+								const otherStint = otherStints[otherStints.length - 1];
+								const tyreAge = (otherStint?.TotalLaps ?? 0) - (stint?.TotalLaps ?? 0);
+								const paceDelta = pace !== null && rival.pace !== null ? pace - rival.pace : null;
+								const tone = rivalTone(rival.trend, rival.role);
+								const duel = sectorDuel(
+									sectorLaps[nr],
+									sectorLaps[other.RacingNumber],
+									(driver.NumberOfLaps ?? 0) + 1,
+									now,
+								);
+								const change = stintChange(history[nr], history[other.RacingNumber]);
+								// closer to the car ahead is good, closer to the car behind is not
+								const changeTone =
+									change === null || Math.abs(change.change) < STINT_CHANGE_SECONDS
+										? "neutral"
+										: change.change < 0 === (rival.role === "ahead")
+											? "gain"
+											: "loss";
+								const undercut = undercuts.get(nr);
+								const fight = undercut?.rival === other.RacingNumber ? undercut : undefined;
 
-							{rival.interval !== null && (
-								<div className="mt-2">
-									<GapBar gap={rival.interval} tone={tone} />
-								</div>
-							)}
-
-							<div className="mt-2 grid grid-cols-1 gap-x-4 gap-y-1 text-sm sm:grid-cols-2">
-								<Fact label="Tyre">
-									<span className="flex items-center gap-1">
-										<Image
-											src={tireIcon(otherStint?.Compound)}
-											alt={otherStint?.Compound ?? "unknown tire"}
-											width={16}
-											height={16}
-										/>
-										{otherStint?.TotalLaps ?? 0}L
-										{tyreAge !== 0 && (
-											<span className="text-zinc-500">
-												, {Math.abs(tyreAge)}L {tyreAge > 0 ? "older" : "fresher"}
-											</span>
-										)}
-									</span>
-								</Fact>
-								<Fact label="Stops">{Math.max(0, otherStints.length - 1)}</Fact>
-								<Fact label={`Pace (3 laps) vs ${tla(other.RacingNumber)}`}>
-									<Delta value={paceDelta} />
-								</Fact>
-								<Fact label={`Best lap vs ${tla(other.RacingNumber)}`}>
-									<Delta value={bestLap} />
-								</Fact>
-								{[0, 1, 2].map((sectorIndex) => (
-									<Fact key={`sector.${sectorIndex}`} label={`Sector ${sectorIndex + 1}`}>
-										<Delta value={delta(driver.Sectors[sectorIndex]?.Value, other.Sectors[sectorIndex]?.Value)} />
-									</Fact>
-								))}
-							</div>
-						</Card>
-					);
-				})}
-			</div>
+								return (
+									<tr key={`rival.${other.RacingNumber}`} className="border-t border-zinc-800/60">
+										<td className="px-1.5 py-1 text-left">
+											<button
+												type="button"
+												className={clsx(
+													"mr-1 cursor-pointer",
+													rival.pinned ? "text-amber-400" : "text-zinc-700 hover:text-zinc-400",
+												)}
+												title={rival.pinned ? "unpin" : "pin, it stays compared when positions change"}
+												onClick={() => setPinnedRival(rival.pinned ? null : other.RacingNumber)}
+											>
+												{rival.pinned ? "★" : "☆"}
+											</button>
+											<Link href={`/dashboard/driver/${other.RacingNumber}`}>
+												<span className="mr-1 text-xs text-zinc-500">P{other.Position}</span>
+												<span
+													className="mr-1 inline-block h-3 w-1 rounded-full align-middle"
+													style={{ backgroundColor: `#${drivers[other.RacingNumber]?.TeamColour ?? "71717a"}` }}
+												/>
+												<span className="font-mono font-black">{tla(other.RacingNumber)}</span>
+											</Link>
+										</td>
+										<td className="font-semibold">
+											{rival.interval !== null
+												? formatSigned(rival.role === "ahead" ? -rival.interval : rival.interval, 3)
+												: "-"}
+										</td>
+										<td className={clsx("text-xs", TONE_TEXT[tone])}>
+											{rival.trend && rival.trend.tone !== "stable" ? `${formatSigned(rival.trend.rate, 2)}/L` : ""}
+											{rival.trend?.drsLaps != null && (
+												<span className="ml-1 font-black" title="laps until within a second at this rate">
+													DRS in {rival.trend.drsLaps}L
+												</span>
+											)}
+										</td>
+										<td className="hidden px-1 sm:table-cell">
+											<SectorDuelCell duel={duel} />
+										</td>
+										<td>
+											<TyreCell stint={otherStint} age={tyreAge} />
+										</td>
+										<td className={clsx("hidden md:table-cell", TONE_TEXT[lapTone(other.LastLapTime)])}>
+											{other.LastLapTime?.Value || "-"}
+										</td>
+										<td className="hidden md:table-cell">
+											<Delta value={paceDelta} digits={2} />
+										</td>
+										<td className={clsx("hidden lg:table-cell", TONE_TEXT[changeTone])}>
+											{change !== null ? `${formatSigned(change.change, 1)}s/${change.laps}L` : "-"}
+										</td>
+										<td className="hidden px-1.5 text-left lg:table-cell">
+											{fight ? (
+												<span className={fight.gain >= 0 ? "text-emerald-400" : "text-red-400"}>
+													{describeUndercut(fight, tla)} {formatSigned(fight.gain, 1)}
+												</span>
+											) : (
+												""
+											)}
+										</td>
+									</tr>
+								);
+							})}
+						</tbody>
+					</table>
+				</Card>
+			)}
 
 			{pitWindow && !out && (
 				<Card title={`Pit window, ${pitLoss}s lost`}>
@@ -770,5 +838,120 @@ function StintLaps({ rows, digits }: { rows: LapLogRow[]; digits: number }) {
 				</span>
 			))}
 		</div>
+	);
+}
+
+type SectorDuel = {
+	// the lap just finished by both cars, shown for a moment at the line
+	lap: number | null;
+	// the sectors of the lap in progress done by both cars
+	sectors: (number | null)[];
+};
+
+/**
+ * what the driver gained, negative, or lost, positive, on another car in each sector of the lap in progress, and
+ * on the whole lap for a few seconds once both cars finished it
+ */
+function sectorDuel(
+	own: Record<number, SectorLap> | undefined,
+	theirs: Record<number, SectorLap> | undefined,
+	lapInProgress: number,
+	now: number,
+): SectorDuel {
+	const total = (entry: SectorLap) =>
+		entry.times.every((time) => time !== null) ? entry.times.reduce<number>((sum, time) => sum + (time ?? 0), 0) : null;
+
+	const finished = Object.keys(own ?? {})
+		.map(Number)
+		.filter((lap) => own?.[lap].done != null && theirs?.[lap]?.done != null)
+		.sort((a, b) => b - a)[0];
+
+	if (finished !== undefined) {
+		const mine = own![finished];
+		const other = theirs![finished];
+		const a = total(mine);
+		const b = total(other);
+		if (a !== null && b !== null && now - Math.max(mine.done!, other.done!) < LAP_FLASH_MS) {
+			return { lap: a - b, sectors: [] };
+		}
+	}
+
+	const mine = own?.[lapInProgress];
+	const other = theirs?.[lapInProgress];
+	return {
+		lap: null,
+		sectors: [0, 1, 2].map((index) => {
+			const a = mine?.times[index];
+			const b = other?.times[index];
+			return a != null && b != null ? a - b : null;
+		}),
+	};
+}
+
+function SectorDuelCell({ duel }: { duel: SectorDuel }) {
+	if (duel.lap !== null) {
+		return (
+			<span
+				className={clsx(
+					"block animate-pulse rounded px-1 text-center text-xs font-black",
+					TONE_CHIP[deltaTone(duel.lap, 0.01)],
+				)}
+			>
+				Lap {formatSigned(duel.lap, 2)}
+			</span>
+		);
+	}
+
+	return (
+		<span className="flex justify-center gap-0.5 text-xs">
+			{duel.sectors.map((value, index) => (
+				<span
+					key={`duel.sector.${index}`}
+					className={clsx(
+						"w-14 rounded px-0.5 text-center",
+						value === null ? "bg-zinc-900 text-zinc-700" : TONE_CHIP[deltaTone(value, 0.01)],
+					)}
+				>
+					{value === null ? "·" : formatSigned(value, 2)}
+				</span>
+			))}
+		</span>
+	);
+}
+
+/**
+ * how much the gap between two cars changed since both are on their current sets, negative when they got closer
+ */
+function stintChange(own: LapSample[] | undefined, other: LapSample[] | undefined) {
+	const ownStint = own?.[own.length - 1]?.stint;
+	const otherStint = other?.[other.length - 1]?.stint;
+	const theirs = new Map(
+		(other ?? [])
+			.filter((sample) => sample.gap !== null && sample.stint === otherStint)
+			.map((sample) => [sample.lap, sample.gap as number]),
+	);
+	const distances = (own ?? [])
+		.filter((sample) => sample.gap !== null && sample.stint === ownStint && theirs.has(sample.lap))
+		.map((sample) => Math.abs((sample.gap as number) - (theirs.get(sample.lap) as number)));
+
+	if (distances.length - 1 < STINT_CHANGE_LAPS) return null;
+	return { change: distances[distances.length - 1] - distances[0], laps: distances.length - 1 };
+}
+
+// the compound with the laps on the set and, for another car, how many laps more or fewer than the driver's set
+function TyreCell({ stint, age }: { stint: Stint | undefined; age?: number }) {
+	return (
+		<span className="inline-flex items-center justify-end gap-1">
+			<Image src={tireIcon(stint?.Compound)} alt={stint?.Compound ?? "unknown tire"} width={16} height={16} />
+			{stint?.TotalLaps ?? 0}L
+			{age !== undefined && age !== 0 && (
+				<span
+					className={clsx("text-xs", age > 0 ? "text-emerald-400" : "text-red-400")}
+					title={`${Math.abs(age)} laps ${age > 0 ? "older" : "fresher"} than the driver's set`}
+				>
+					{age > 0 ? `+${age}` : age}
+				</span>
+			)}
+		</span>
 	);
 }

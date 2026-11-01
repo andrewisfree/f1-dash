@@ -19,6 +19,16 @@ export type Undercut = {
 
 type Stop = { lap: number; stint: number };
 
+/**
+ * the fight around the stops in plain words: once both stopped, what the stops were worth on the rival; before,
+ * what the rival stopping now would be worth for the car that stopped, and stopping now for the one still out
+ */
+export function describeUndercut(undercut: Undercut, tla: (nr: string) => string) {
+	const rival = tla(undercut.rival);
+	if (undercut.done) return `stops vs ${rival}`;
+	return undercut.role === "undercut" ? `if ${rival} pits` : `pit now vs ${rival}`;
+}
+
 // the lap the new set first shows, the stop is around it
 function getStops(samples: LapSample[]): Stop[] {
 	const stops: Stop[] = [];

@@ -7,6 +7,7 @@ import { useDataEngine } from "@/hooks/useDataEngine";
 import { useLapBackfill } from "@/hooks/useLapBackfill";
 import { useLapHistory } from "@/hooks/useLapHistory";
 import { useQualifyingTracker } from "@/hooks/useQualifyingTracker";
+import { useSectorTimes } from "@/hooks/useSectorTimes";
 import { useWakeLock } from "@/hooks/useWakeLock";
 import { useStores } from "@/hooks/useStores";
 import { useSocket } from "@/hooks/useSocket";
@@ -64,6 +65,7 @@ export default function DashboardLayout({ children }: Props) {
 	useLapHistory();
 	useLapBackfill();
 	useQualifyingTracker();
+	useSectorTimes();
 
 	const ended = useDataStore(({ state }) => state?.SessionStatus?.Status === "Ends");
 

@@ -4,16 +4,7 @@ import clsx from "clsx";
 import type { Stint } from "@/types/state.type";
 
 import { formatSigned } from "@/lib/race";
-import {
-	COMPOUND_CHIP,
-	degradationTone,
-	deltaTone,
-	TONE_BORDER,
-	TONE_FILL,
-	TONE_TEXT,
-	tyreWear,
-	type Tone,
-} from "@/lib/tones";
+import { COMPOUND_CHIP, degradationTone, deltaTone, TONE_TEXT } from "@/lib/tones";
 
 type CardProps = {
 	title: ReactNode;
@@ -34,81 +25,12 @@ export function Card({ title, action, className, children }: CardProps) {
 	);
 }
 
-type TileProps = {
-	label: string;
-	note?: ReactNode;
-	// colours the left edge and the value
-	tone?: Tone;
-	children: ReactNode;
-};
-
-export function Tile({ label, note, tone, children }: TileProps) {
-	return (
-		<div
-			className={clsx(
-				"rounded-r-md border-l-4 bg-zinc-900/60 px-2.5 py-2",
-				tone ? TONE_BORDER[tone] : "border-l-transparent",
-			)}
-		>
-			<p className="text-xs text-zinc-500">{label}</p>
-			<div
-				className={clsx(
-					"text-lg leading-tight font-semibold tabular-nums",
-					tone && tone !== "neutral" && TONE_TEXT[tone],
-				)}
-			>
-				{children}
-			</div>
-			{note && <div className="text-xs text-zinc-500 tabular-nums">{note}</div>}
-		</div>
-	);
-}
-
-export function Fact({ label, children }: { label: ReactNode; children: ReactNode }) {
-	return (
-		<div className="flex items-center justify-between gap-2">
-			<span className="text-zinc-500">{label}</span>
-			<span className="tabular-nums">{children}</span>
-		</div>
-	);
-}
-
 // negative means our car is faster
 export function Delta({ value, digits = 3 }: { value: number | null; digits?: number }) {
 	if (value === null) return <span className="text-zinc-600">-</span>;
 
 	const tone = deltaTone(value, 0.0005);
 	return <span className={tone === "neutral" ? "text-zinc-400" : TONE_TEXT[tone]}>{formatSigned(value, digits)}</span>;
-}
-
-// longer gaps fill the bar, a car within a second barely shows
-const GAP_SCALE = 5;
-
-/**
- * a bar as long as the gap to another car, coloured by whether it is coming closer
- */
-export function GapBar({ gap, tone }: { gap: number | null; tone: Tone }) {
-	const share = gap !== null ? Math.max(0.03, Math.min(1, gap / GAP_SCALE)) : 0;
-
-	return (
-		<div className="h-2 w-full rounded-full bg-zinc-800">
-			<div className={clsx("h-2 rounded-full", TONE_FILL[tone])} style={{ width: `${share * 100}%` }} />
-		</div>
-	);
-}
-
-/**
- * how worn the set is against how long that compound usually lasts
- */
-export function TyreWearBar({ stint }: { stint?: Stint }) {
-	const wear = tyreWear(stint);
-	if (!wear) return null;
-
-	return (
-		<div className="mt-1 h-1.5 w-full rounded-full bg-zinc-800" title="laps on the set against a typical stint">
-			<div className={clsx("h-1.5 rounded-full", TONE_FILL[wear.tone])} style={{ width: `${wear.share * 100}%` }} />
-		</div>
-	);
 }
 
 type StintStripProps = {

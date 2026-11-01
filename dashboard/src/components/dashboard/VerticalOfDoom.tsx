@@ -21,7 +21,7 @@ import { getCutoffPosition, inDangerZone } from "@/lib/qualifying";
 import { describeTrend, formatSigned, getPitWindow, isNeutralized, isOffLeadLap, type Trend } from "@/lib/race";
 import { getDriverFlags, type DriverFlags } from "@/lib/raceControl";
 import { tireIcon } from "@/lib/tires";
-import { getUndercuts, type Undercut } from "@/lib/undercut";
+import { describeUndercut, getUndercuts, type Undercut } from "@/lib/undercut";
 import { heatChip, TONE_CHIP, tyreWear } from "@/lib/tones";
 import { useDataStore } from "@/stores/useDataStore";
 import { useLapHistoryStore } from "@/stores/useLapHistoryStore";
@@ -122,14 +122,6 @@ function StintChange({ values }: { values: number[] }) {
 			{formatSigned(change, 1)}s in {laps}L
 		</span>
 	);
-}
-
-// the fight around the stops in plain words: once both stopped, what the stops were worth on the rival; before,
-// what the rival stopping now would be worth for the car that stopped, and stopping now for the one still out
-function undercutLabel(undercut: Undercut, tla: (nr: string) => string) {
-	const rival = tla(undercut.rival);
-	if (undercut.done) return `stops vs ${rival}`;
-	return undercut.role === "undercut" ? `if ${rival} pits` : `pit now vs ${rival}`;
 }
 
 function spreadLabels(points: Omit<DriverPoint, "labelY">[]): DriverPoint[] {
@@ -1068,7 +1060,7 @@ function DriverRow({
 							undercut.done ? (undercut.gain >= 0 ? "bg-emerald-500/20" : "bg-red-500/20") : "border-dashed",
 						)}
 					>
-						{undercutLabel(undercut, tla)} {formatSigned(undercut.gain, 1)}
+						{describeUndercut(undercut, tla)} {formatSigned(undercut.gain, 1)}
 					</span>
 				)}
 				{tyres && (tyres.compounds || Math.abs(tyres.age) >= 3) && (
