@@ -21,6 +21,7 @@ import { getCutoffPosition, inDangerZone } from "@/lib/qualifying";
 import { describeTrend, formatSigned, getPitWindow, isNeutralized, isOffLeadLap, type Trend } from "@/lib/race";
 import { getDriverFlags, type DriverFlags } from "@/lib/raceControl";
 import { tireIcon } from "@/lib/tires";
+import { getUndercuts, type Undercut } from "@/lib/undercut";
 import { heatChip, TONE_CHIP, tyreWear } from "@/lib/tones";
 import { useDataStore } from "@/stores/useDataStore";
 import { useLapHistoryStore } from "@/stores/useLapHistoryStore";
@@ -412,6 +413,12 @@ export default function VerticalOfDoom() {
 		return getPitWindow(entries, reference, pitLoss.loss);
 	}, [isRace, pitLoss, points, reference]);
 
+	const undercuts = useMemo(
+		() =>
+			isRace ? getUndercuts(history, state?.LapCount?.CurrentLap ?? null, pitLoss.green) : new Map<string, Undercut>(),
+		[history, isRace, pitLoss.green, state?.LapCount?.CurrentLap],
+	);
+
 	// cars that could stop now and rejoin in the same place; with a red flag the tyres are changed for free
 	const freeStops = useMemo(() => {
 		const result = new Set<string>();
@@ -490,6 +497,22 @@ export default function VerticalOfDoom() {
 		const event = events.get(nr);
 		// against the reference driver the row shows that gap, not the one to the car ahead
 		const drsLaps = reference ? null : (trends.get(nr)?.interval?.drsLaps ?? null);
+		// the sets of the two cars in a fight, the fresher set often decides it
+		const ahead = ordered[ordered.indexOf(driver) - 1];
+		const aheadStints = ahead ? state.TimingAppData?.Lines[ahead.RacingNumber]?.Stints : undefined;
+		const ownStint = appData?.Stints?.at(-1);
+		const aheadStint = aheadStints?.at(-1);
+		const tyres =
+			(extra?.battle || drsLaps !== null) && ownStint?.TotalLaps != null && aheadStint?.TotalLaps != null
+				? {
+						age: ownStint.TotalLaps - aheadStint.TotalLaps,
+						compounds:
+							ownStint.Compound && aheadStint.Compound && ownStint.Compound !== aheadStint.Compound
+								? `${ownStint.Compound[0]}/${aheadStint.Compound[0]}`
+								: null,
+						rival: ahead.RacingNumber,
+					}
+				: null;
 
 		return (
 			<DriverRow
@@ -512,6 +535,9 @@ export default function VerticalOfDoom() {
 				flags={flags.get(nr)}
 				penaltyPosition={penaltyPositions.get(nr)}
 				freeStop={freeStops.has(nr)}
+				tyres={tyres}
+				undercut={undercuts.get(nr)}
+				tla={tla}
 				stop={
 					stopRatings.has(nr) && driver.NumberOfLaps - stopRatings.get(nr)!.lap <= STOP_SHOWN_LAPS
 						? stopRatings.get(nr)
@@ -945,6 +971,10 @@ type DriverRowProps = RowExtra & {
 	freeStop: boolean;
 	// the last stop, for a few laps after it was measured
 	stop: StopRating | undefined;
+	// in a fight: laps more on the set than the car ahead, and the two compounds when they differ
+	tyres: { age: number; compounds: string | null; rival: string } | null;
+	undercut: Undercut | undefined;
+	tla: (nr: string) => string;
 	pitLoss: number;
 	favorite: boolean;
 	danger: boolean;
@@ -969,6 +999,9 @@ function DriverRow({
 	penaltyPosition,
 	freeStop,
 	stop,
+	tyres,
+	undercut,
+	tla,
 	pitLoss,
 	favorite,
 	danger,
@@ -1081,6 +1114,35 @@ function DriverRow({
 						+{flags.penalty}s
 						{penaltyPosition !== undefined && penaltyPosition !== parseInt(driver.Position) && ` P${penaltyPosition}`}
 					</Badge>
+				)}
+				{undercut && (
+					<span
+						title={
+							undercut.done
+								? `${undercut.role} on ${tla(undercut.rival)}: ${formatSigned(undercut.gain, 1)}s once both stopped`
+								: `${undercut.role} on ${tla(undercut.rival)}: ${formatSigned(undercut.gain, 1)}s if ${undercut.role === "undercut" ? tla(undercut.rival) : "this car"} stopped now`
+						}
+						className={clsx(
+							"shrink-0 rounded border px-1 text-[10px] leading-4 font-black whitespace-nowrap tabular-nums",
+							undercut.gain >= 0 ? "border-emerald-500 text-emerald-300" : "border-red-500 text-red-300",
+							undercut.done ? (undercut.gain >= 0 ? "bg-emerald-500/20" : "bg-red-500/20") : "border-dashed",
+						)}
+					>
+						{undercut.role === "undercut" ? "UC" : "OC"} {tla(undercut.rival)} {formatSigned(undercut.gain, 1)}
+					</span>
+				)}
+				{tyres && (tyres.compounds || Math.abs(tyres.age) >= 3) && (
+					<span
+						title={`set ${Math.abs(tyres.age)} laps ${tyres.age < 0 ? "fresher" : "older"} than ${tla(tyres.rival)}`}
+						className={clsx(
+							"shrink-0 rounded px-1 text-[10px] leading-4 font-black whitespace-nowrap tabular-nums",
+							tyres.age < 0 ? "bg-emerald-500/20 text-emerald-200" : "bg-red-500/20 text-red-200",
+						)}
+					>
+						{tyres.compounds && `${tyres.compounds} `}
+						{tyres.age > 0 ? "+" : ""}
+						{tyres.age}L
+					</span>
 				)}
 				{stop && (
 					<span
