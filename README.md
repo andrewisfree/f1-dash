@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="./dash/public/tag-logo.png" width="200">
-    <img alt="f1-dash" src="./dash/public/tag-logo.png" width="200">
+    <source media="(prefers-color-scheme: dark)" srcset="./dashboard/public/tag-logo.png" width="200">
+    <img alt="f1-dash" src="./dashboard/public/tag-logo.png" width="200">
   </picture>
 </p>
 

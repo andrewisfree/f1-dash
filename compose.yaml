@@ -1,72 +1,29 @@
 services:
-  live:
-    image: ghcr.io/slowlydev/f1-dash-live:latest
-    build:
-      context: .
-      target: live
-    restart: unless-stopped
-    ports:
-      - ${LIVE_PORT:-4000}:4000
-    environment:
-      - ORIGIN=${ORIGIN:-http://localhost:${FRONTEND_PORT:-3000};http://${HOST_IP}:${FRONTEND_PORT:-3000}}
-      - LIVE_ADDRESS=${LIVE_ADDRESS:-0.0.0.0:4000}
-      - RUST_LOG=${RUST_LOG:-live=debug,client=debug}
-
   api:
     image: ghcr.io/slowlydev/f1-dash-api:latest
-    build:
-      context: .
-      target: api
-    restart: unless-stopped
     ports:
-      - ${API_PORT:-4001}:4001
+      - 4010:80
     environment:
-      - ORIGIN=${ORIGIN:-http://localhost:${FRONTEND_PORT:-3000};http://${HOST_IP}:${FRONTEND_PORT:-3000}}
-      - API_ADDRESS=${API_ADDRESS:-0.0.0.0:4001}
-      - RUST_LOG=${RUST_LOG:-api=debug}
+      - RUST_LOG=api=debug
+      - ADDRESS=0.0.0.0:80
+      - ORIGIN=http://localhost:3000
 
-  frontend:
+  realtime:
+    image: ghcr.io/slowlydev/f1-dash-realtime:latest
+    ports:
+      - 4000:80
+    environment:
+      - RUST_LOG=realtime=debug
+      - ADDRESS=0.0.0.0:80
+      - ORIGIN=http://localhost:3000
+
+  web:
     image: ghcr.io/slowlydev/f1-dash:latest
-    build:
-      context: ./dash/
-      args:
-        NEXT_PUBLIC_LIVE_URL: ${NEXT_PUBLIC_LIVE_URL:-http://${HOST_IP:-localhost}:${LIVE_PORT:-4000}}
-        API_URL: ${API_URL:-http://api:4001}
-        DISABLE_IFRAME: ${DISABLE_IFRAME:-1}
-    restart: unless-stopped
-    ports:
-      - ${FRONTEND_PORT:-3000}:3000
     depends_on:
+      - realtime
       - api
-      - live
-    environment:
-      - NEXT_PUBLIC_LIVE_URL=${NEXT_PUBLIC_LIVE_URL:-http://${HOST_IP:-localhost}:${LIVE_PORT:-4000}}
-      - API_URL=${API_URL:-http://api:4001}
-      - DISABLE_IFRAME=${DISABLE_IFRAME:-1}
-
-  timescaledb:
-    image: timescale/timescaledb:latest-pg16
     ports:
-      - ${PG_PORT:-5432}:5432
-    restart: unless-stopped
+      - 3000:3000
     environment:
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-password}
-
-  importer:
-    image: ghcr.io/slowlydev/f1-dash-importer:latest
-    build:
-      context: .
-      target: importer
-    environment:
-      - DATABASE_URL=${DATABASE_URL:-postgres://postgres:password@timescaledb:5432/postgres}
-
-  analytics:
-    image: ghcr.io/slowlydev/f1-dash-analytics:latest
-    build:
-      context: .
-      target: analytics
-    environment:
-      - ORIGIN=${ORIGIN:-http://localhost:${FRONTEND_PORT:-3000};http://${HOST_IP}:${FRONTEND_PORT:-3000}}
-      - ANALYTICS_ADDRESS=${ANALYTICS_ADDRESS:-0.0.0.0:4002}
-      - RUST_LOG=${RUST_LOG:-analytics=debug}
-      - DATABASE_URL=${DATABASE_URL:-postgres://postgres:password@timescaledb:5432/postgres}
+      - NEXT_PUBLIC_LIVE_URL=http://localhost:4000
+      - API_URL=http://api:80

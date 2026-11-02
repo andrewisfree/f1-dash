@@ -1,5 +1,6 @@
 # os
 .DS_Store
+.claude/
 
 # creds
 .env
@@ -10,3 +11,6 @@ compose.env
 
 # data
 *.data.*
+
+# recorded sessions
+recordings/*.tsv

@@ -1,0 +1,84 @@
+import type { ReactNode } from "react";
+import clsx from "clsx";
+
+import type { Stint } from "@/types/state.type";
+
+import { formatSigned } from "@/lib/race";
+import { COMPOUND_CHIP, degradationTone, deltaTone, TONE_TEXT } from "@/lib/tones";
+
+type CardProps = {
+	title: ReactNode;
+	action?: ReactNode;
+	className?: string;
+	children: ReactNode;
+};
+
+export function Card({ title, action, className, children }: CardProps) {
+	return (
+		<div className={clsx("rounded-lg border border-zinc-800 p-3", className)}>
+			<div className="mb-2 flex items-center justify-between gap-2">
+				<p className="text-xs text-zinc-500">{title}</p>
+				{action}
+			</div>
+			{children}
+		</div>
+	);
+}
+
+// negative means our car is faster
+export function Delta({ value, digits = 3 }: { value: number | null; digits?: number }) {
+	if (value === null) return <span className="text-zinc-600">-</span>;
+
+	const tone = deltaTone(value, 0.0005);
+	return <span className={tone === "neutral" ? "text-zinc-400" : TONE_TEXT[tone]}>{formatSigned(value, digits)}</span>;
+}
+
+type StintStripProps = {
+	stints: Stint[];
+	// tyre loss per lap of every stint, by its number from 1
+	degradation: (stint: number) => number | null;
+	// the set picked to show its laps, by its number from 1, when the blocks can be picked
+	selected?: number | null;
+	onSelect?: (stint: number) => void;
+};
+
+/**
+ * one block per set, as long as the laps run on it, in the colour of the compound
+ */
+export function StintStrip({ stints, degradation, selected, onSelect }: StintStripProps) {
+	if (stints.length === 0) return null;
+
+	return (
+		<div className="flex gap-1 text-xs">
+			{stints.map((stint, index) => {
+				const laps = Math.max(1, (stint.TotalLaps ?? 0) - (stint.StartLaps ?? 0));
+				const deg = degradation(index + 1);
+				const current = index === stints.length - 1;
+
+				return (
+					<div
+						key={`stint.${index}`}
+						onClick={onSelect ? () => onSelect(index + 1) : undefined}
+						className={clsx(
+							"min-w-0 truncate rounded px-1.5 py-1 text-left tabular-nums",
+							COMPOUND_CHIP[stint.Compound ?? ""] ?? "bg-zinc-800 text-zinc-300",
+							onSelect && "cursor-pointer",
+							selected === undefined
+								? current && "ring-1 ring-zinc-300"
+								: selected === index + 1 && "ring-2 ring-zinc-100",
+						)}
+						style={{ flexGrow: laps, flexBasis: 0 }}
+						title={`${stint.Compound ?? "Unknown"}, ${stint.New?.toLowerCase() === "true" ? "new" : "used"}, ${laps} laps`}
+					>
+						<span className="font-black">{stint.Compound?.[0] ?? "?"}</span> {laps}L
+						{deg !== null && (
+							<span className={clsx("ml-1 font-semibold", TONE_TEXT[degradationTone(deg)])}>
+								{formatSigned(deg, 2)}
+							</span>
+						)}
+					</div>
+				);
+			})}
+		</div>
+	);
+}

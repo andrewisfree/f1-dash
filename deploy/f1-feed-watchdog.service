@@ -1,0 +1,7 @@
+[Unit]
+Description=Restart the f1-dash realtime service when the F1 feed stalls
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/f1-dash-v4/feed-watchdog.py
