@@ -2,6 +2,12 @@
 
 Storico degli interventi su deploy e infrastruttura di f1-dash. Voce più recente in alto.
 
+## 2026-11-02 — Fine weekend Messico, 108 spento
+
+LXC 108 spento via API alle 00:29 UTC (`status/shutdown`, poi `stopped`). Dopo: host 461 MB liberi su 3363, swap
+usata 3,2 GB, VM Home Assistant (103) in esecuzione. La registrazione del weekend e i giri della gara sono già sul PC
+(`recordings/2026-mexico.tsv`, `recordings/laps-mexico-race.json`).
+
 ## 2026-11-01 — Pagina pilota con la tabella dei rivali
 
 Installata sul 108 la web a `9e266b2` alle 23:29 UTC: nella pagina pilota i riquadri iniziali e le schede dei
